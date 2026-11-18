@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>借款折抵表</title>
+<style>
+  body{font-family:-apple-system,"PingFang TC","Microsoft JhengHei",sans-serif;margin:0;padding:16px;background:#f6f7f9;color:#222}
+  h1{font-size:20px;margin:0 0 12px}
+  .card{background:#fff;border:1px solid #ddd;border-radius:10px;padding:12px;margin-bottom:12px}
+  .cfg{display:flex;flex-wrap:wrap;gap:14px;align-items:center}
+  .cfg label{display:flex;gap:6px;align-items:center;font-size:14px}
+  .cfg input[type=number]{width:110px;padding:4px 6px}
+  .wrap{overflow-x:auto}
+  table{border-collapse:collapse;background:#fff;min-width:900px;width:100%}
+  th,td{border:1px solid #999;padding:6px;text-align:center;font-size:14px}
+  th{background:#fafafa}
+  th textarea.name{width:120px;text-align:center;border:1px dashed #bbb;padding:2px;font:inherit;font-weight:bold;resize:none}
+  th input.amt{width:60px;text-align:right;padding:2px}
+  th input.cnt{width:36px;text-align:center;padding:2px}
+  .sub{font-size:12px;color:#555;font-weight:normal}
+  td.date{white-space:nowrap;font-weight:bold}
+  td input[type=checkbox]{width:20px;height:20px;margin:2px;cursor:pointer}
+  td.num{text-align:right;white-space:nowrap}
+  th.fix{white-space:nowrap;min-width:90px}
+  td.ok{white-space:nowrap;min-width:90px}
+  .rem{font-weight:bold}
+  .btns{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+  button{padding:8px 14px;border-radius:8px;border:1px solid #888;background:#fff;cursor:pointer;font-size:14px}
+  button.primary{background:#2563eb;color:#fff;border-color:#2563eb}
+  .summary{font-size:15px;line-height:1.9}
+  .summary b{font-size:18px}
+  #cards{display:none}
+  .day{background:#fff;border:1px solid #ccc;border-radius:12px;margin-bottom:12px;overflow:hidden}
+  .day .hd{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:#fafafa;border-bottom:1px solid #ddd;font-weight:bold}
+  .day .it{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid #eee}
+  .day .it .nm{font-size:15px}
+  .day .it .am{font-size:12px;color:#666}
+  .day .it input[type=checkbox]{width:28px;height:28px;margin:3px}
+  .day .ft{display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px;padding:10px 12px;font-size:15px}
+  @media (max-width:760px){
+    body{padding:10px}
+    .wrap{display:none}
+    #cards{display:block}
+    .cfg{flex-direction:column;align-items:stretch}
+    .cfg label{justify-content:space-between}
+    .cfg input[type=number]{width:140px;font-size:16px}
+    button{padding:12px 14px;font-size:16px;flex:1 1 45%}
+    .summary{font-size:14px}
+  }
+</style>
+</head>
+<body>
+<h1>借款折抵表</h1>
+<div class="card" id="status" style="font-size:14px"></div>
+<div id="sync" style="font-size:13px;color:#555;margin:-6px 2px 10px"></div>
+
+<div class="card" id="cfgCard">
+  <div class="cfg">
+    <label>借款總額 <input type="number" id="total" min="0"> 元</label>
+    <label>年利率 <input type="number" id="rate" step="0.01" min="0"> %</label>
+    <label>期數 <input type="number" id="term" min="1" step="1"> 期（月）</label>
+    <label><input type="checkbox" id="deductDaily"> 每天另外扣掉「每日應繳」</label>
+  </div>
+</div>
+
+<div class="card summary" id="summary"></div>
+
+<div class="card" id="backend" style="display:none">
+  <b>管理者後台</b>
+  <div style="font-size:14px;margin:6px 0">在這裡可以取消某一天的確認，取消後那天就能重新勾選。</div>
+  <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+    <select id="unDay" style="padding:6px"></select>
+    <button onclick="unconfirm()">取消這天的確認</button>
+  </div>
+</div>
+
+<div class="wrap">
+<table>
+  <thead><tr id="h1"></tr><tr id="h2"></tr></thead>
+  <tbody id="body"></tbody>
+</table>
+</div>
+
+<div id="cards"></div>
+
+<div class="btns">
+  <button class="primary" onclick="addDay()">＋ 新增下一天</button>
+  <button id="removeBtn" onclick="removeLast()">刪除最後一天</button>
+  <button id="addTaskBtn" onclick="addTask()">＋ 新增項目</button>
+  <button id="adminBtn" onclick="adminLogin()">管理者登入</button>
+  <button id="pwdBtn" onclick="changePwd()" style="display:none">更改密碼</button>
+  <button id="discardBtn" onclick="discard()" style="display:none">放棄修改</button>
+  <button onclick="exportData()">匯出備份</button>
+  <button id="importBtn" onclick="document.getElementById('imp').click()">匯入備份</button>
+  <input type="file" id="imp" accept=".json" style="display:none" onchange="importData(event)">
+</div>
+
+<script>
+const KEY = 'family-loan-table-v1';
+const defaults = {
+  total: 0, rate: 0, term: 12, deductDaily: false,
+  tasks: [
+    {name:'挖貓砂+倒垃圾', amt:50, cnt:3},
+    {name:'跳繩+拉筋', amt:50, cnt:3},
+    {name:'曬衣服+摺衣服', amt:50, cnt:2},
+    {name:'10:30前入睡', amt:50, cnt:1},
+    {name:'拿外送食物', amt:10, cnt:1},
+    {name:'小考90分以上', amt:50, cnt:3},
+    {name:'英文週考高於平均+校排前100名', amt:1000, cnt:1},
+    {name:'英文段考高於平均+校排前100名', amt:3000, cnt:1}
+  ],
+  start: '2026-11-17',
+  days: 3,
+  checks: {},
+  confirmed: {}
+};
+let S = load();
+let view = null, menuOpen = false;
+function todayIndex(){ const a = new Date(S.start+'T00:00:00'), t = new Date(); t.setHours(0,0,0,0); return Math.round((t-a)/86400000); }
+function dayStats(){
+  const dp = dailyPay(); let rem = Number(S.total)||0; const out = [];
+  for(let d=0; d<S.days; d++){
+    let disc = 0;
+    S.tasks.forEach((t, ti) => { for(let b=0; b<t.cnt; b++) if(S.checks[`${d}-${ti}-${b}`]) disc += Number(t.amt)||0; });
+    if(S.confirmed[d]) rem -= disc;
+    if(S.deductDaily) rem -= dp;
+    out.push({disc, rem});
+  }
+  return out;
+}
+function loadHistory(){
+  const st = dayStats(); let h = '';
+  for(let d=S.days-1; d>=0; d--){
+    const ok = S.confirmed[d];
+    h += `<div onclick="view=${d};renderBody();updateAdminUI()" style="padding:10px 12px;border-top:1px solid #eee;cursor:pointer;${d===view?'background:#eef4ff':''}">
+      <div style="display:flex;justify-content:space-between;font-weight:bold"><span>${dateOf(d)}</span>${ok?'<span style="color:#14632d">✔ 已確認</span>':'<span style="color:#8a4b00">待確認</span>'}</div>
+      <div style="display:flex;justify-content:space-between;font-size:13px;color:#555;margin-top:3px"><span>${ok?'':'待確認 '}折抵 ${fmt(st[d].disc)} 元</span><span>剩餘本金 ${fmt(st[d].rem)} 元</span></div></div>`;
+  }
+  document.getElementById('histList').innerHTML = h;
+}
+function go(n){ view += n; renderBody(); updateAdminUI(); }
+// 日期自動補到今天
+function extendToToday(){ const ti = todayIndex(); if(ti+1 > S.days){ S.days = ti+1; return true; } return false; }
+if(extendToToday()) localStorage.setItem(KEY, JSON.stringify(S));
+
+function load(){
+  try{ const s = JSON.parse(localStorage.getItem(KEY)); if(s) return Object.assign({}, JSON.parse(JSON.stringify(defaults)), s); }catch(e){}
+  return JSON.parse(JSON.stringify(defaults));
+}
+let isAdmin = false, dirty = false;
+const PKEY = 'family-loan-admin-hash';
+function save(){ localStorage.setItem(KEY, JSON.stringify(S)); dirty = false; updateAdminUI(); schedulePush(); }
+
+// ===== 雲端共用資料（textdb.dev）=====
+const DB_URL = 'https://textdb.dev/api/data/family-loan-table-aa6e3c61-618f-4f94-a109-63a9d53e1783';
+const BKEY = 'family-loan-table-base-v1';
+const clone = o => JSON.parse(JSON.stringify(o));
+const same = (a,b) => JSON.stringify(a) === JSON.stringify(b);
+let base = (function(){ try{ const b = JSON.parse(localStorage.getItem(BKEY)); if(b) return b; }catch(e){} return null; })();
+let remoteReady = false, pushing = false, pushAgain = false, pushTimer = null, lastSync = null, syncState = 'loading';
+function setSync(st, msg){
+  syncState = st;
+  const el = document.getElementById('sync'); if(!el) return;
+  const t = lastSync ? lastSync.toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit'}) : '';
+  const m = {
+    loading: '☁️ 正在讀取雲端資料…',
+    saving: '☁️ 儲存中…',
+    ok: '☁️ 已同步' + (t ? '（' + t + '）' : '') + '，全家看到的是同一份資料',
+    error: '⚠️ 無法連線雲端，目前顯示這台裝置上的資料；修改會先存在這台裝置，連上後自動同步'
+  };
+  el.textContent = msg || m[st]; el.style.color = st==='error' ? '#b45309' : '#555';
+}
+async function fetchRemote(){
+  const r = await fetch(DB_URL + '?t=' + Date.now(), {cache:'no-store'});
+  if(!r.ok) throw new Error('HTTP ' + r.status);
+  const txt = (await r.text()).trim();
+  if(!txt) return null;            // 雲端還沒有資料
+  const o = JSON.parse(txt);       // 格式錯誤會丟出例外，不會覆蓋雲端
+  return Object.assign(clone(defaults), o);
+}
+async function putRemote(obj){
+  const r = await fetch(DB_URL, {method:'POST', headers:{'Content-Type':'text/plain'}, body: JSON.stringify(obj)});
+  if(!r.ok) throw new Error('HTTP ' + r.status);
+}
+// 三方合併：只把「這台裝置自上次同步後改過的地方」套到雲端最新資料上
+function merge3(b, l, r){
+  b = b || {}; const out = clone(r);
+  const keys = new Set([...Object.keys(b), ...Object.keys(l)]);
+  for(const k of keys){
+    if(k==='checks' || k==='confirmed'){
+      const bb = b[k]||{}, ll = l[k]||{}; out[k] = out[k]||{};
+      for(const s of new Set([...Object.keys(bb), ...Object.keys(ll)])){
+        if(!!bb[s] !== !!ll[s]){ if(ll[s]) out[k][s] = true; else delete out[k][s]; }
+      }
+    } else if(k==='days'){
+      if(l.days !== b.days) out.days = l.days < b.days ? l.days : Math.max(l.days, r.days||0);
+    } else if(!same(l[k], b[k])) out[k] = clone(l[k]);
+  }
+  // 雲端已確認（鎖住）的日子，勾選以雲端為準
+  for(const d in (r.confirmed||{})){
+    if(!out.confirmed[d]) continue;
+    for(const c in out.checks) if(c.startsWith(d+'-') && !r.checks[c]) delete out.checks[c];
+    for(const c in r.checks) if(c.startsWith(d+'-')) out.checks[c] = true;
+  }
+  return out;
+}
+function editing(){ const a = document.activeElement; return a && (a.tagName==='TEXTAREA' || (a.tagName==='INPUT' && a.type!=='checkbox')); }
+function applyRemote(newS){
+  if(same(newS, S)) return;
+  S = newS; localStorage.setItem(KEY, JSON.stringify(S));
+  if(!editing()) init();
+}
+function setBase(b){ base = clone(b); localStorage.setItem(BKEY, JSON.stringify(base)); }
+function schedulePush(){ clearTimeout(pushTimer); pushTimer = setTimeout(push, 600); if(remoteReady && syncState!=='error') setSync('saving'); }
+async function push(){
+  if(!remoteReady){ return; }                 // 還沒讀到雲端資料前不寫入，避免蓋掉別人的資料
+  if(pushing){ pushAgain = true; return; }
+  if(base && same(S, base)){ setSync('ok'); return; }
+  pushing = true; setSync('saving');
+  try{
+    const snap = clone(S);
+    const remote = await fetchRemote();
+    const merged = remote ? merge3(base, snap, remote) : snap;
+    await putRemote(merged);
+    setBase(merged); lastSync = new Date();
+    applyRemote(same(S, snap) ? merged : merge3(snap, S, merged));
+    setSync('ok');
+  }catch(e){ console.warn('push failed', e); setSync('error'); setTimeout(()=>schedulePush(), 15000); }
+  pushing = false;
+  if(pushAgain){ pushAgain = false; push(); }
+}
+async function pull(){
+  if(pushing || (remoteReady && base && !same(S, base))) return;  // 有還沒送出的修改時先不拉，交給 push 合併
+  try{
+    const remote = await fetchRemote();
+    if(remote === null){
+      // 第一次使用：把目前資料存到雲端
+      remoteReady = true; base = null; await push(); return;
+    }
+    const local = clone(S);
+    const merged = base ? merge3(base, local, remote) : remote;
+    const firstLoad = !remoteReady;
+    remoteReady = true; lastSync = new Date();
+    if(!base){ setBase(remote); } else if(same(local, base)) { setBase(remote); }
+    S = merged; const ext = extendToToday();
+    applyRemote(S); if(firstLoad) init();
+    if(!same(S, base) || ext) schedulePush(); else setSync('ok');
+  }catch(e){ console.warn('pull failed', e); if(!remoteReady || syncState!=='saving') setSync('error'); }
+}
+setInterval(() => { if(document.visibilityState==='visible') pull(); }, 20000);
+document.addEventListener('visibilitychange', () => { if(document.visibilityState==='visible') pull(); });
+window.addEventListener('online', () => pull());
+async function sha(t){ const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(t)); return Array.from(new Uint8Array(b)).map(x=>x.toString(16).padStart(2,'0')).join(''); }
+async function adminLogin(){
+  if(isAdmin){ isAdmin=false; init(); return; }
+  const stored = S.adminHash || localStorage.getItem(PKEY) || await sha('1111');
+  const p = prompt('請輸入管理者密碼：'); if(p===null) return;
+  if(await sha(p) === stored) isAdmin = true; else { alert('密碼錯誤'); return; }
+  init();
+}
+async function changePwd(){
+  if(!isAdmin) return;
+  const p1 = prompt('請輸入新的管理者密碼：'); if(!p1) return;
+  const p2 = prompt('請再輸入一次確認：'); if(p1!==p2){ alert('兩次密碼不一樣，沒有變更。'); return; }
+  S.adminHash = await sha(p1); localStorage.setItem(PKEY, S.adminHash); save(); alert('密碼已更新');
+}
+function discard(){ if(confirm('放棄所有還沒儲存的修改？')){ S = load(); dirty=false; init(); } }
+function updateAdminUI(){
+  refreshBackend();
+  document.getElementById('cfgCard').style.display = isAdmin ? '' : 'none';
+  document.getElementById('adminBtn').textContent = isAdmin ? '管理者登出' : '管理者登入';
+  ['pwdBtn','addTaskBtn','removeBtn','importBtn'].forEach(id => document.getElementById(id).style.display = isAdmin ? '' : 'none');
+  document.getElementById('discardBtn').style.display = 'none';
+  document.querySelectorAll('.cfg input, th textarea, th input').forEach(el => el.disabled = !isAdmin);
+  document.querySelectorAll('.delTask').forEach(el => el.style.display = isAdmin ? '' : 'none');
+  const st = document.getElementById('status');
+  if(isAdmin){ st.textContent = '管理者模式：可以確認每一天、修改金額、項目和借款設定，所有修改都會自動儲存'; st.style.background='#e7f6ec'; st.style.color='#14632d'; }
+  else { st.textContent = '一般模式：可以勾選和新增日期，勾選會自動儲存；要等管理者確認當天才會算進剩餘本金，金額和設定只有管理者能改'; st.style.background='#eef2f7'; st.style.color='#333'; }
+}
+
+
+function dateOf(i){
+  const d = new Date(S.start + 'T00:00:00'); d.setDate(d.getDate() + i);
+  return (d.getFullYear()-1911) + '/' + String(d.getMonth()+1).padStart(2,'0') + '/' + String(d.getDate()).padStart(2,'0');
+}
+const fmt = n => Math.round(n).toLocaleString('zh-TW');
+
+// 本息平均攤還
+function monthlyPay(){
+  const P = Number(S.total)||0, n = Math.max(1, Math.round(Number(S.term)||1)), r = (Number(S.rate)||0)/100/12;
+  if(P<=0) return 0;
+  if(r===0) return P/n;
+  return P * r * Math.pow(1+r,n) / (Math.pow(1+r,n)-1);
+}
+function dailyPay(){ return monthlyPay()/30; }
+
+function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+
+function renderHeader(){
+  const h1 = document.getElementById('h1'), h2 = document.getElementById('h2');
+  let a = '<th rowspan="2">日期</th>', b = '';
+  S.tasks.forEach((t, i) => {
+    a += `<th><textarea class="name" rows="2" onchange="setTask(${i},'name',this.value)">${esc(t.name)}</textarea><br>
+      <span class="sub">格數 <input class="cnt" type="number" min="1" max="10" value="${t.cnt}" onchange="setTask(${i},'cnt',this.value)">
+      <a class="delTask" href="#" onclick="delTask(${i});return false" title="刪除項目" style="color:#c00;text-decoration:none">✕</a></span></th>`;
+    b += `<th class="sub">單次折抵 <input class="amt" type="number" value="${t.amt}" onchange="setTask(${i},'amt',this.value)"> 元</th>`;
+  });
+  a += '<th class="fix" rowspan="2">管理者確認</th><th class="fix" rowspan="2">當日折抵</th><th class="fix" rowspan="2">目前借款<br>剩餘本金</th>';
+  h1.innerHTML = a; h2.innerHTML = b;
+}
+
+function renderBody(){
+  let html = '';
+  for(let d=0; d<S.days; d++){
+    html += `<tr><td class="date">${dateOf(d)}</td>`;
+    S.tasks.forEach((t, ti) => {
+      html += '<td>';
+      for(let b=0; b<t.cnt; b++){
+        const k = `${d}-${ti}-${b}`;
+        html += `<input type="checkbox" ${S.checks[k]?'checked':''} ${S.confirmed[d]?'disabled':''} onchange="toggle('${k}',this.checked)">`;
+      }
+      html += '</td>';
+    });
+    html += `<td class="ok">${S.confirmed[d] ? '<span style="color:#14632d;font-weight:bold">✔ 已確認</span>' : (isAdmin ? `<button onclick="confirmDay(${d},true)" style="padding:4px 10px">確認當天</button>` : '<span style="color:#8a4b00">待確認</span>')}</td><td class="num" data-disc="${d}"></td><td class="num rem" data-rem="${d}"></td></tr>`;
+  }
+  document.getElementById('body').innerHTML = html;
+  let c = '';
+  if(view===null) view = todayIndex();
+  view = Math.max(0, Math.min(S.days-1, view));
+  c += `<div style="display:flex;gap:8px;margin-bottom:10px"><button style="flex:1" onclick="go(-1)" ${view<=0?'disabled':''}>◀ 前一天</button><button style="flex:1" onclick="view=todayIndex();renderBody();updateAdminUI()">今天</button><button style="flex:1" onclick="go(1)" ${view>=S.days-1?'disabled':''}>後一天 ▶</button></div>`;
+  c += `<details id="dayMenu" style="background:#fff;border:1px solid #ccc;border-radius:12px;margin-bottom:10px;overflow:hidden" ontoggle="menuOpen=this.open; if(this.open) loadHistory()"><summary style="padding:12px;font-weight:bold;cursor:pointer">📅 歷史紀錄（目前顯示 ${dateOf(view)}）</summary><div id="histList" style="max-height:55vh;overflow-y:auto"></div></details>`;
+  for(let d=view; d===view; d++){
+    const st = S.confirmed[d] ? '<span style="color:#14632d">✔ 已確認</span>' : (isAdmin ? `<button onclick="confirmDay(${d},true)" style="flex:none;padding:6px 12px">確認當天</button>` : '<span style="color:#8a4b00">待確認</span>');
+    c += `<div class="day"><div class="hd"><span>${dateOf(d)}</span>${st}</div>`;
+    S.tasks.forEach((t, ti) => {
+      let boxes = '';
+      for(let b=0; b<t.cnt; b++){ const k = `${d}-${ti}-${b}`; boxes += `<input type="checkbox" ${S.checks[k]?'checked':''} ${S.confirmed[d]?'disabled':''} onchange="toggle('${k}',this.checked)">`; }
+      c += `<div class="it"><div><div class="nm">${esc(t.name)}</div><div class="am">單次折抵 ${fmt(t.amt)} 元</div></div><div>${boxes}</div></div>`;
+    });
+    c += `<div class="ft"><span>當日折抵 <span data-disc="${d}"></span></span><span>剩餘本金 <b data-rem="${d}"></b></span></div></div>`;
+  }
+  document.getElementById('cards').innerHTML = c;
+  calc();
+}
+
+function syncBoxes(){ document.querySelectorAll('input[type=checkbox][onchange^="toggle"]').forEach(el => { const k = el.getAttribute('onchange').match(/'(.+?)'/)[1]; el.checked = !!S.checks[k]; }); }
+function setAll(t,d,v){ document.querySelectorAll(`[data-${t}="${d}"]`).forEach(el => el.textContent = v); }
+function calc(){
+  const mp = monthlyPay(), dp = dailyPay();
+  let remaining = Number(S.total)||0, totalDisc = 0, pending = 0;
+  for(let d=0; d<S.days; d++){
+    let disc = 0;
+    S.tasks.forEach((t, ti) => {
+      for(let b=0; b<t.cnt; b++) if(S.checks[`${d}-${ti}-${b}`]) disc += Number(t.amt)||0;
+    });
+    if(S.confirmed[d]){ totalDisc += disc; remaining -= disc; } else pending += disc;
+    if(S.deductDaily) remaining -= dp;
+    setAll('disc',d, S.confirmed[d] ? fmt(disc) + ' 元' : '待確認 ' + fmt(disc) + ' 元');
+    setAll('rem',d, fmt(remaining) + ' 元');
+  }
+  document.getElementById('summary').innerHTML =
+    `借款總額 ${fmt(S.total||0)} 元，年利率 ${S.rate||0}%，共 ${S.term||0} 期<br>
+     每月應繳 <b>${fmt(mp)}</b> 元，每日應繳 <b>${fmt(dp)}</b> 元（每月應繳 ÷ 30）<br>
+     已確認折抵 <b>${fmt(totalDisc)}</b> 元，待確認 ${fmt(pending)} 元，目前剩餘本金 <b>${fmt(remaining)}</b> 元`;
+}
+
+function confirmDay(d, v){ if(!isAdmin) return; if(v && !confirm('確認 '+dateOf(d)+' 的勾選？確認後就鎖住，只能從管理者後台取消。')) return; if(v) S.confirmed[d]=true; else delete S.confirmed[d]; save(); renderBody(); updateAdminUI(); }
+function refreshBackend(){
+  const sel = document.getElementById('unDay'); let o = '';
+  for(let d=0; d<S.days; d++) if(S.confirmed[d]) o += `<option value="${d}">${dateOf(d)}</option>`;
+  sel.innerHTML = o || '<option value="">目前沒有已確認的日子</option>';
+  document.getElementById('backend').style.display = isAdmin ? '' : 'none';
+}
+function unconfirm(){
+  const v = document.getElementById('unDay').value; if(v==='') return;
+  if(!confirm('取消 '+dateOf(Number(v))+' 的確認？')) return;
+  delete S.confirmed[Number(v)]; save(); renderBody(); updateAdminUI();
+}
+function toggle(k, v){ const d = Number(k.split('-')[0]); if(S.confirmed[d]) return; setTimeout(syncBoxes,0); if(v) S.checks[k]=true; else delete S.checks[k]; save(); calc(); }
+function setTask(i, f, v){ if(!isAdmin) return;
+  if(f!=='name'){ v = Number(v)||0; if(f==='cnt') v = Math.max(1, Math.min(10, Math.round(v))); }
+  S.tasks[i][f] = v; save(); renderHeader(); renderBody(); updateAdminUI();
+}
+function addTask(){ if(!isAdmin) return; S.tasks.push({name:'新項目', amt:50, cnt:1}); save(); renderHeader(); renderBody(); updateAdminUI(); }
+function delTask(i){ if(!isAdmin) return;
+  if(!confirm('確定刪除「'+S.tasks[i].name+'」這個項目？它的勾選紀錄也會一起刪掉。')) return;
+  const nc = {};
+  for(const k in S.checks){ const [d,t,b] = k.split('-').map(Number); if(t<i) nc[k]=true; else if(t>i) nc[`${d}-${t-1}-${b}`]=true; }
+  S.checks = nc; S.tasks.splice(i,1); save(); renderHeader(); renderBody(); updateAdminUI();
+}
+function addDay(){ S.days++; view = S.days-1; save(); renderBody(); if(window.innerWidth>760) window.scrollTo(0, document.body.scrollHeight); else document.getElementById('cards').scrollIntoView(); }
+function removeLast(){ if(!isAdmin) return;
+  if(S.days<=1) return;
+  if(!confirm('確定刪除 '+dateOf(S.days-1)+' 這一天？')) return;
+  S.days--; delete S.confirmed[S.days]; for(const k in S.checks) if(k.startsWith(S.days+'-')) delete S.checks[k];
+  save(); renderBody();
+}
+function exportData(){
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(S,null,2)],{type:'application/json'}));
+  a.download = '借款折抵表備份.json'; a.click();
+}
+function importData(e){
+  const f = e.target.files[0]; if(!f) return;
+  if(!isAdmin){ alert('只有管理者可以匯入備份，請先登入。'); e.target.value=''; return; }
+  f.text().then(t => { S = Object.assign({}, JSON.parse(JSON.stringify(defaults)), JSON.parse(t)); save(); init(); });
+}
+
+function init(){
+  ['total','rate','term'].forEach(id => {
+    const el = document.getElementById(id); el.value = S[id];
+    el.oninput = () => { if(!isAdmin) return; S[id] = Number(el.value)||0; save(); calc(); };
+  });
+  const dd = document.getElementById('deductDaily'); dd.checked = S.deductDaily;
+  dd.onchange = () => { if(!isAdmin) return; S.deductDaily = dd.checked; save(); calc(); };
+  renderHeader(); renderBody(); updateAdminUI();
+}
+init();
+setSync('loading');
+pull();
+</script>
+</body>
+</html>
