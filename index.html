@@ -226,8 +226,9 @@ function merge3(b, l, r){
 }
 function editing(){ const a = document.activeElement; return a && (a.tagName==='TEXTAREA' || (a.tagName==='INPUT' && a.type!=='checkbox')); }
 function applyRemote(newS){
-  if(same(newS, S)) return;
+  const changed = !same(newS, S);
   S = newS; localStorage.setItem(KEY, JSON.stringify(S));
+  if(!changed) return;
   if(!editing()) init();
 }
 function setBase(b){ base = clone(b); localStorage.setItem(BKEY, JSON.stringify(base)); }
@@ -271,8 +272,8 @@ async function pull(){
     const firstLoad = !remoteReady;
     remoteReady = true; lastSync = new Date();
     if(!base){ setBase(remote); } else if(same(local, base)) { setBase(remote); }
-    S = merged; const ext = extendToToday();
-    applyRemote(S); if(firstLoad) init();
+    const prev = S; S = merged; const ext = extendToToday(); const newS = S; S = prev;
+    applyRemote(newS); if(firstLoad) init();
     if(!same(S, base) || ext) schedulePush(); else setSync('ok');
   }catch(e){ console.warn('pull failed', e); if(!remoteReady || syncState!=='saving') setSync('error'); }
 }
