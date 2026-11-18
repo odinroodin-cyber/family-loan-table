@@ -59,6 +59,27 @@
     button{padding:12px 14px;font-size:16px;flex:1 1 45%}
     .summary{font-size:14px}
   }
+  .sg{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+  .sg div{display:flex;flex-direction:column;background:#f6f7f9;border-radius:8px;padding:6px 8px}
+  .sg span{font-size:12px;color:#666}
+  .sg b{font-size:18px}
+  .sm{font-size:12px;color:#666;margin-top:6px}
+  .nav{display:flex;gap:6px;margin-bottom:8px}
+  .nav button{flex:1;padding:8px 4px;font-size:14px}
+  @media (max-width:760px){
+    h1{font-size:18px;margin:0 0 6px}
+    #status{font-size:12px !important;padding:6px 10px;margin-bottom:4px}
+    #sync{font-size:11px !important;margin:0 2px 6px !important}
+    .card{padding:8px 10px;margin-bottom:8px}
+    .summary{line-height:1.3}
+    .sg{grid-template-columns:repeat(2,1fr);gap:6px}
+    .sg b{font-size:17px}
+    .nav button{padding:8px 4px;font-size:14px;flex:1 1 0}
+    .day .hd{padding:8px 12px}
+    .day .it{padding:7px 12px}
+    .day .it .nm{font-size:14px}
+    .day .it input[type=checkbox]{width:26px;height:26px}
+  }
 </style>
 </head>
 <body>
@@ -179,7 +200,7 @@ function setSync(st, msg){
   const m = {
     loading: '☁️ 正在讀取雲端資料…',
     saving: '☁️ 儲存中…',
-    ok: '☁️ 已同步' + (t ? '（' + t + '）' : '') + '，全家看到的是同一份資料',
+    ok: '☁️ 已同步' + (t ? '（' + t + '）' : '') + '',
     error: '⚠️ 無法連線雲端，目前顯示這台裝置上的資料；修改會先存在這台裝置，連上後自動同步'
   };
   el.textContent = msg || m[st]; el.style.color = st==='error' ? '#b45309' : '#555';
@@ -305,7 +326,7 @@ function updateAdminUI(){
   document.querySelectorAll('.delTask').forEach(el => el.style.display = isAdmin ? '' : 'none');
   const st = document.getElementById('status');
   if(isAdmin){ st.textContent = '管理者模式：可以確認每一天、修改金額、項目和借款設定，所有修改都會自動儲存'; st.style.background='#e7f6ec'; st.style.color='#14632d'; }
-  else { st.textContent = '一般模式：可以勾選和新增日期，勾選會自動儲存；要等管理者確認當天才會算進剩餘本金，金額和設定只有管理者能改'; st.style.background='#eef2f7'; st.style.color='#333'; }
+  else { st.textContent = '一般模式：勾選會自動儲存，管理者確認後才算數'; st.style.background='#eef2f7'; st.style.color='#333'; }
 }
 
 
@@ -358,8 +379,7 @@ function renderBody(){
   let c = '';
   if(view===null) view = todayIndex();
   view = Math.max(0, Math.min(S.days-1, view));
-  c += `<div style="display:flex;gap:8px;margin-bottom:10px"><button style="flex:1" onclick="go(-1)" ${view<=0?'disabled':''}>◀ 前一天</button><button style="flex:1" onclick="view=todayIndex();renderBody();updateAdminUI()">今天</button><button style="flex:1" onclick="go(1)" ${view>=S.days-1?'disabled':''}>後一天 ▶</button></div>`;
-  c += `<details id="dayMenu" style="background:#fff;border:1px solid #ccc;border-radius:12px;margin-bottom:10px;overflow:hidden" ontoggle="menuOpen=this.open; if(this.open) loadHistory()"><summary style="padding:12px;font-weight:bold;cursor:pointer">📅 歷史紀錄（目前顯示 ${dateOf(view)}）</summary><div id="histList" style="max-height:55vh;overflow-y:auto"></div></details>`;
+  c += `<div class="nav"><button onclick="go(-1)" ${view<=0?'disabled':''}>◀ 前一天</button><button onclick="view=todayIndex();renderBody();updateAdminUI()">今天</button><button onclick="go(1)" ${view>=S.days-1?'disabled':''}>後一天 ▶</button></div>`;
   for(let d=view; d===view; d++){
     const st = S.confirmed[d] ? '<span style="color:#14632d">✔ 已確認</span>' : (isAdmin ? `<button onclick="confirmDay(${d},true)" style="flex:none;padding:6px 12px">確認當天</button>` : '<span style="color:#8a4b00">待確認</span>');
     c += `<div class="day"><div class="hd"><span>${dateOf(d)}</span>${st}</div>`;
@@ -371,6 +391,7 @@ function renderBody(){
     c += `<div class="it" style="display:block"><div class="nm" style="margin-bottom:6px">特殊折抵</div>${spHtml(d)}</div>`;
     c += `<div class="ft"><span>當日折抵 <span data-disc="${d}"></span></span><span>剩餘本金 <b data-rem="${d}"></b></span></div></div>`;
   }
+  c += `<details id="dayMenu" style="background:#fff;border:1px solid #ccc;border-radius:12px;margin-bottom:10px;overflow:hidden" ontoggle="menuOpen=this.open; if(this.open) loadHistory()"><summary style="padding:12px;font-weight:bold;cursor:pointer">📅 歷史紀錄（目前顯示 ${dateOf(view)}）</summary><div id="histList" style="max-height:55vh;overflow-y:auto"></div></details>`;
   document.getElementById('cards').innerHTML = c;
   calc();
 }
@@ -392,9 +413,8 @@ function calc(){
     setAll('rem',d, fmt(remaining) + ' 元');
   }
   document.getElementById('summary').innerHTML =
-    `借款總額 ${fmt(S.total||0)} 元，年利率 ${S.rate||0}%，共 ${S.term||0} 期<br>
-     每月應繳 <b>${fmt(mp)}</b> 元，每日應繳 <b>${fmt(dp)}</b> 元（每月應繳 ÷ 30）<br>
-     已確認折抵 <b>${fmt(totalDisc)}</b> 元，待確認 ${fmt(pending)} 元，目前剩餘本金 <b>${fmt(remaining)}</b> 元`;
+    `<div class="sg"><div><span>剩餘本金</span><b>${fmt(remaining)}</b></div><div><span>已確認折抵</span><b>${fmt(totalDisc)}</b></div><div><span>每月應繳</span><b>${fmt(mp)}</b></div><div><span>每日應繳</span><b>${fmt(dp)}</b></div></div>
+     <div class="sm">借款 ${fmt(S.total||0)} 元・年利率 ${S.rate||0}%・${S.term||0} 期・待確認 ${fmt(pending)} 元</div>`;
 }
 
 // ===== 特殊折抵：每天預設一個空白欄，可自行新增；勾選且管理者確認後才算 =====
