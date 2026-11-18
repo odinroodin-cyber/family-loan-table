@@ -151,25 +151,37 @@ const defaults = {
 let S = load();
 let view = null, menuOpen = false;
 function todayIndex(){ const a = new Date(S.start+'T00:00:00'), t = new Date(); t.setHours(0,0,0,0); return Math.round((t-a)/86400000); }
-function dayStats(){
-  const dp = dailyPay(); let rem = Number(S.total)||0; const out = [];
-  for(let d=0; d<S.days; d++){
-    let disc = 0;
-    S.tasks.forEach((t, ti) => { for(let b=0; b<t.cnt; b++) if(S.checks[`${d}-${ti}-${b}`]) disc += Number(t.amt)||0; });
-    disc += spDisc(d);
-    if(S.confirmed[d]) rem -= disc;
-    if(S.deductDaily) rem -= dp;
-    out.push({disc, rem});
-  }
-  return out;
+function dayDisc(d){
+  let disc = 0;
+  S.tasks.forEach((t, ti) => { for(let b=0; b<t.cnt; b++) if(S.checks[`${d}-${ti}-${b}`]) disc += Number(t.amt)||0; });
+  return disc + spDisc(d);
 }
+// 每日計息：利息 = 當日剩餘本金 × 年利率 ÷ 365；折抵先抵利息，抵完才抵本金
+function ledger(){
+  const dp = dailyPay(), r = (Number(S.rate)||0)/100/365;
+  let principal = Number(S.total)||0, accrued = 0, totalDisc = 0, pending = 0, totalInt = 0;
+  const out = [];
+  for(let d=0; d<S.days; d++){
+    const disc = dayDisc(d);
+    const interest = principal > 0 ? principal * r : 0;
+    accrued += interest; totalInt += interest;
+    let pay = 0;
+    if(S.confirmed[d]){ pay += disc; totalDisc += disc; } else pending += disc;
+    if(S.deductDaily) pay += dp;
+    const toInt = Math.min(pay, accrued); accrued -= toInt; pay -= toInt;
+    principal -= pay;
+    out.push({disc, interest, toInt, principal, accrued, owed: principal + accrued});
+  }
+  return {days: out, principal, accrued, owed: principal + accrued, totalDisc, pending, totalInt};
+}
+function dayStats(){ return ledger().days.map(x => ({disc: x.disc, rem: x.owed})); }
 function loadHistory(){
   const st = dayStats(); let h = '';
   for(let d=S.days-1; d>=0; d--){
     const ok = S.confirmed[d];
     h += `<div onclick="view=${d};renderBody();updateAdminUI()" style="padding:10px 12px;border-top:1px solid #eee;cursor:pointer;${d===view?'background:#eef4ff':''}">
       <div style="display:flex;justify-content:space-between;font-weight:bold"><span>${dateOf(d)}</span>${ok?'<span style="color:#14632d">✔ 已確認</span>':'<span style="color:#8a4b00">待確認</span>'}</div>
-      <div style="display:flex;justify-content:space-between;font-size:13px;color:#555;margin-top:3px"><span>${ok?'':'待確認 '}折抵 ${fmt(st[d].disc)} 元</span><span>剩餘本金 ${fmt(st[d].rem)} 元</span></div></div>`;
+      <div style="display:flex;justify-content:space-between;font-size:13px;color:#555;margin-top:3px"><span>${ok?'':'待確認 '}折抵 ${fmt(st[d].disc)} 元</span><span>剩餘本金+利息 ${fmt(st[d].rem)} 元</span></div></div>`;
   }
   document.getElementById('histList').innerHTML = h;
 }
@@ -343,6 +355,7 @@ function monthlyPay(){
   if(r===0) return P/n;
   return P * r * Math.pow(1+r,n) / (Math.pow(1+r,n)-1);
 }
+function totalOwed(){ const P = Number(S.total)||0; if(P<=0) return 0; return monthlyPay() * Math.max(1, Math.round(Number(S.term)||1)); }
 function dailyPay(){ return monthlyPay()/30; }
 
 function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
@@ -356,7 +369,7 @@ function renderHeader(){
       <a class="delTask" href="#" onclick="delTask(${i});return false" title="刪除項目" style="color:#c00;text-decoration:none">✕</a></span></th>`;
     b += `<th class="sub">單次折抵 <input class="amt" type="number" value="${t.amt}" onchange="setTask(${i},'amt',this.value)"> 元</th>`;
   });
-  a += '<th class="sp" rowspan="2">特殊折抵</th><th class="fix" rowspan="2">管理者確認</th><th class="fix" rowspan="2">當日折抵</th><th class="fix" rowspan="2">目前借款<br>剩餘本金</th>';
+  a += '<th class="sp" rowspan="2">特殊折抵</th><th class="fix" rowspan="2">管理者確認</th><th class="fix" rowspan="2">當日折抵</th><th class="fix" rowspan="2">當日利息</th><th class="fix" rowspan="2">剩餘本金<br>+利息</th>';
   h1.innerHTML = a; h2.innerHTML = b;
 }
 
@@ -373,7 +386,7 @@ function renderBody(){
       html += '</td>';
     });
     html += `<td class="sp">${spHtml(d)}</td>`;
-    html += `<td class="ok">${S.confirmed[d] ? '<span style="color:#14632d;font-weight:bold">✔ 已確認</span>' : (isAdmin ? `<button onclick="confirmDay(${d},true)" style="padding:4px 10px">確認當天</button>` : '<span style="color:#8a4b00">待確認</span>')}</td><td class="num" data-disc="${d}"></td><td class="num rem" data-rem="${d}"></td></tr>`;
+    html += `<td class="ok">${S.confirmed[d] ? '<span style="color:#14632d;font-weight:bold">✔ 已確認</span>' : (isAdmin ? `<button onclick="confirmDay(${d},true)" style="padding:4px 10px">確認當天</button>` : '<span style="color:#8a4b00">待確認</span>')}</td><td class="num" data-disc="${d}"></td><td class="num" data-int="${d}"></td><td class="num rem" data-rem="${d}"></td></tr>`;
   }
   document.getElementById('body').innerHTML = html;
   let c = '';
@@ -389,7 +402,7 @@ function renderBody(){
       c += `<div class="it"><div><div class="nm">${esc(t.name)}</div><div class="am">單次折抵 ${fmt(t.amt)} 元</div></div><div>${boxes}</div></div>`;
     });
     c += `<div class="it" style="display:block"><div class="nm" style="margin-bottom:6px">特殊折抵</div>${spHtml(d)}</div>`;
-    c += `<div class="ft"><span>當日折抵 <span data-disc="${d}"></span></span><span>剩餘本金 <b data-rem="${d}"></b></span></div></div>`;
+    c += `<div class="ft"><span>當日折抵 <span data-disc="${d}"></span></span><span>當日利息 <span data-int="${d}"></span></span><span>剩餘本金+利息 <b data-rem="${d}"></b></span></div></div>`;
   }
   c += `<details id="dayMenu" style="background:#fff;border:1px solid #ccc;border-radius:12px;margin-bottom:10px;overflow:hidden" ontoggle="menuOpen=this.open; if(this.open) loadHistory()"><summary style="padding:12px;font-weight:bold;cursor:pointer">📅 歷史紀錄（目前顯示 ${dateOf(view)}）</summary><div id="histList" style="max-height:55vh;overflow-y:auto"></div></details>`;
   document.getElementById('cards').innerHTML = c;
@@ -399,23 +412,18 @@ function renderBody(){
 function syncBoxes(){ document.querySelectorAll('input[type=checkbox][onchange^="toggle"]').forEach(el => { const k = el.getAttribute('onchange').match(/'(.+?)'/)[1]; el.checked = !!S.checks[k]; }); }
 function setAll(t,d,v){ document.querySelectorAll(`[data-${t}="${d}"]`).forEach(el => el.textContent = v); }
 function calc(){
-  const mp = monthlyPay(), dp = dailyPay();
-  let remaining = Number(S.total)||0, totalDisc = 0, pending = 0;
-  for(let d=0; d<S.days; d++){
-    let disc = 0;
-    S.tasks.forEach((t, ti) => {
-      for(let b=0; b<t.cnt; b++) if(S.checks[`${d}-${ti}-${b}`]) disc += Number(t.amt)||0;
-    });
-    disc += spDisc(d);
-    if(S.confirmed[d]){ totalDisc += disc; remaining -= disc; } else pending += disc;
-    if(S.deductDaily) remaining -= dp;
-    setAll('disc',d, S.confirmed[d] ? fmt(disc) + ' 元' : '待確認 ' + fmt(disc) + ' 元');
-    setAll('rem',d, fmt(remaining) + ' 元');
-  }
+  const mp = monthlyPay(), dp = dailyPay(), L = ledger();
+  L.days.forEach((x, d) => {
+    setAll('disc',d, (S.confirmed[d] ? fmt(x.disc) + ' 元' : '待確認 ' + fmt(x.disc) + ' 元'));
+    setAll('int',d, '+' + (Math.round(x.interest*100)/100).toLocaleString('zh-TW') + ' 元');
+    setAll('rem',d, fmt(x.owed) + ' 元');
+  });
   document.getElementById('summary').innerHTML =
-    `<div class="sg"><div><span>剩餘本金</span><b>${fmt(remaining)}</b></div><div><span>已確認折抵</span><b>${fmt(totalDisc)}</b></div><div><span>每月應繳</span><b>${fmt(mp)}</b></div><div><span>每日應繳</span><b>${fmt(dp)}</b></div></div>
-     <div class="sm">借款 ${fmt(S.total||0)} 元・年利率 ${S.rate||0}%・${S.term||0} 期・待確認 ${fmt(pending)} 元</div>`;
+    `<div class="sg"><div><span>剩餘本金+利息</span><b>${fmt(L.owed)}</b></div><div><span>剩餘本金</span><b>${fmt(L.principal)}</b></div><div><span>未付利息</span><b>${fmt(L.accrued)}</b></div><div><span>已確認折抵</span><b>${fmt(L.totalDisc)}</b></div></div>
+     <div class="sm">借款 ${fmt(S.total||0)} 元・年利率 ${S.rate||0}%（每天約增加 ${(Math.round(Math.max(0,L.principal)*(Number(S.rate)||0)/100/365*100)/100).toLocaleString('zh-TW')} 元利息）・${S.term||0} 期・每月應繳 ${fmt(mp)} 元・每日應繳 ${fmt(dp)} 元・待確認 ${fmt(pending=L.pending)} 元</div>
+     <div class="sm">折抵會先抵掉未付利息，抵完才扣本金</div>`;
 }
+let pending = 0;
 
 // ===== 特殊折抵：每天預設一個空白欄，可自行新增；勾選且管理者確認後才算 =====
 function spList(d){ const l = S.special && S.special[d]; return (l && l.length) ? l : [{text:'', amt:0, on:false}]; }
