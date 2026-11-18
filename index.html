@@ -38,7 +38,18 @@
   .day .it .am{font-size:12px;color:#666}
   .day .it input[type=checkbox]{width:28px;height:28px;margin:3px}
   .day .ft{display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px;padding:10px 12px;font-size:15px}
+  .spr{display:flex;align-items:center;gap:4px;margin:3px 0}
+  .spr input[type=checkbox]{width:22px;height:22px;flex:none}
+  .spt{flex:1;min-width:0;padding:4px 6px;font-size:14px}
+  .spa{width:72px;padding:4px 6px;font-size:14px;text-align:right}
+  .spu{font-size:13px;color:#555}
+  .spx{color:#c00;text-decoration:none;padding:0 4px;font-size:16px}
+  button.spadd{padding:4px 10px;font-size:13px;margin-top:4px}
+  th.sp,td.sp{min-width:240px;text-align:left}
   @media (max-width:760px){
+    .spt,.spa{font-size:16px}
+    .day .it .spr input[type=checkbox]{width:28px;height:28px}
+    button.spadd{flex:none;padding:8px 14px}
     body{padding:10px}
     .wrap{display:none}
     #cards{display:block}
@@ -113,7 +124,8 @@ const defaults = {
   start: '2026-11-17',
   days: 3,
   checks: {},
-  confirmed: {}
+  confirmed: {},
+  special: {}
 };
 let S = load();
 let view = null, menuOpen = false;
@@ -123,6 +135,7 @@ function dayStats(){
   for(let d=0; d<S.days; d++){
     let disc = 0;
     S.tasks.forEach((t, ti) => { for(let b=0; b<t.cnt; b++) if(S.checks[`${d}-${ti}-${b}`]) disc += Number(t.amt)||0; });
+    disc += spDisc(d);
     if(S.confirmed[d]) rem -= disc;
     if(S.deductDaily) rem -= dp;
     out.push({disc, rem});
@@ -193,6 +206,11 @@ function merge3(b, l, r){
       for(const s of new Set([...Object.keys(bb), ...Object.keys(ll)])){
         if(!!bb[s] !== !!ll[s]){ if(ll[s]) out[k][s] = true; else delete out[k][s]; }
       }
+    } else if(k==='special'){
+      const bb = b.special||{}, ll = l.special||{}; out.special = out.special||{};
+      for(const d of new Set([...Object.keys(bb), ...Object.keys(ll)])){
+        if(!same(bb[d], ll[d])){ if(ll[d]) out.special[d] = clone(ll[d]); else delete out.special[d]; }
+      }
     } else if(k==='days'){
       if(l.days !== b.days) out.days = l.days < b.days ? l.days : Math.max(l.days, r.days||0);
     } else if(!same(l[k], b[k])) out[k] = clone(l[k]);
@@ -202,6 +220,7 @@ function merge3(b, l, r){
     if(!out.confirmed[d]) continue;
     for(const c in out.checks) if(c.startsWith(d+'-') && !r.checks[c]) delete out.checks[c];
     for(const c in r.checks) if(c.startsWith(d+'-')) out.checks[c] = true;
+    out.special = out.special||{}; if(r.special && r.special[d]) out.special[d] = clone(r.special[d]); else delete out.special[d];
   }
   return out;
 }
@@ -221,8 +240,20 @@ async function push(){
   try{
     const snap = clone(S);
     const remote = await fetchRemote();
-    const merged = remote ? merge3(base, snap, remote) : snap;
+    if(!remote) throw new Error('雲端資料是空的');
+    let merged = merge3(base, snap, remote);
     await putRemote(merged);
+    // 確認沒有被同時儲存的其他人蓋掉；被蓋掉就再合併一次
+    let final = merged;
+    for(let i=0; i<3; i++){
+      await new Promise(r => setTimeout(r, 1200 + Math.random()*1500));
+      const r2 = await fetchRemote();
+      if(!r2) break;
+      const again = merge3(base, snap, r2);
+      if(same(again, r2)){ final = r2; break; }
+      await putRemote(again); final = again;
+    }
+    merged = final;
     setBase(merged); lastSync = new Date();
     applyRemote(same(S, snap) ? merged : merge3(snap, S, merged));
     setSync('ok');
@@ -234,10 +265,7 @@ async function pull(){
   if(pushing || (remoteReady && base && !same(S, base))) return;  // 有還沒送出的修改時先不拉，交給 push 合併
   try{
     const remote = await fetchRemote();
-    if(remote === null){
-      // 第一次使用：把目前資料存到雲端
-      remoteReady = true; base = null; await push(); return;
-    }
+    if(remote === null) throw new Error('雲端資料是空的');   // 不用本機資料覆蓋雲端
     const local = clone(S);
     const merged = base ? merge3(base, local, remote) : remote;
     const firstLoad = !remoteReady;
@@ -306,7 +334,7 @@ function renderHeader(){
       <a class="delTask" href="#" onclick="delTask(${i});return false" title="刪除項目" style="color:#c00;text-decoration:none">✕</a></span></th>`;
     b += `<th class="sub">單次折抵 <input class="amt" type="number" value="${t.amt}" onchange="setTask(${i},'amt',this.value)"> 元</th>`;
   });
-  a += '<th class="fix" rowspan="2">管理者確認</th><th class="fix" rowspan="2">當日折抵</th><th class="fix" rowspan="2">目前借款<br>剩餘本金</th>';
+  a += '<th class="sp" rowspan="2">特殊折抵</th><th class="fix" rowspan="2">管理者確認</th><th class="fix" rowspan="2">當日折抵</th><th class="fix" rowspan="2">目前借款<br>剩餘本金</th>';
   h1.innerHTML = a; h2.innerHTML = b;
 }
 
@@ -322,6 +350,7 @@ function renderBody(){
       }
       html += '</td>';
     });
+    html += `<td class="sp">${spHtml(d)}</td>`;
     html += `<td class="ok">${S.confirmed[d] ? '<span style="color:#14632d;font-weight:bold">✔ 已確認</span>' : (isAdmin ? `<button onclick="confirmDay(${d},true)" style="padding:4px 10px">確認當天</button>` : '<span style="color:#8a4b00">待確認</span>')}</td><td class="num" data-disc="${d}"></td><td class="num rem" data-rem="${d}"></td></tr>`;
   }
   document.getElementById('body').innerHTML = html;
@@ -338,6 +367,7 @@ function renderBody(){
       for(let b=0; b<t.cnt; b++){ const k = `${d}-${ti}-${b}`; boxes += `<input type="checkbox" ${S.checks[k]?'checked':''} ${S.confirmed[d]?'disabled':''} onchange="toggle('${k}',this.checked)">`; }
       c += `<div class="it"><div><div class="nm">${esc(t.name)}</div><div class="am">單次折抵 ${fmt(t.amt)} 元</div></div><div>${boxes}</div></div>`;
     });
+    c += `<div class="it" style="display:block"><div class="nm" style="margin-bottom:6px">特殊折抵</div>${spHtml(d)}</div>`;
     c += `<div class="ft"><span>當日折抵 <span data-disc="${d}"></span></span><span>剩餘本金 <b data-rem="${d}"></b></span></div></div>`;
   }
   document.getElementById('cards').innerHTML = c;
@@ -354,6 +384,7 @@ function calc(){
     S.tasks.forEach((t, ti) => {
       for(let b=0; b<t.cnt; b++) if(S.checks[`${d}-${ti}-${b}`]) disc += Number(t.amt)||0;
     });
+    disc += spDisc(d);
     if(S.confirmed[d]){ totalDisc += disc; remaining -= disc; } else pending += disc;
     if(S.deductDaily) remaining -= dp;
     setAll('disc',d, S.confirmed[d] ? fmt(disc) + ' 元' : '待確認 ' + fmt(disc) + ' 元');
@@ -364,6 +395,25 @@ function calc(){
      每月應繳 <b>${fmt(mp)}</b> 元，每日應繳 <b>${fmt(dp)}</b> 元（每月應繳 ÷ 30）<br>
      已確認折抵 <b>${fmt(totalDisc)}</b> 元，待確認 ${fmt(pending)} 元，目前剩餘本金 <b>${fmt(remaining)}</b> 元`;
 }
+
+// ===== 特殊折抵：每天預設一個空白欄，可自行新增；勾選且管理者確認後才算 =====
+function spList(d){ const l = S.special && S.special[d]; return (l && l.length) ? l : [{text:'', amt:0, on:false}]; }
+function spEnsure(d){ S.special = S.special || {}; if(!S.special[d] || !S.special[d].length) S.special[d] = [{text:'', amt:0, on:false}]; return S.special[d]; }
+function spDisc(d){ const l = S.special && S.special[d]; return l ? l.reduce((a,e) => a + (e.on ? (Number(e.amt)||0) : 0), 0) : 0; }
+function spHtml(d){
+  const lock = !!S.confirmed[d], dis = lock ? 'disabled' : '';
+  let h = spList(d).map((e,i) => `<div class="spr">
+    <input type="checkbox" ${e.on?'checked':''} ${dis} onchange="spSet(${d},${i},'on',this.checked)">
+    <input type="text" class="spt" placeholder="說明" value="${esc(e.text||'')}" ${dis} oninput="spSet(${d},${i},'text',this.value)">
+    <input type="number" class="spa" placeholder="金額" value="${e.amt?e.amt:''}" ${dis} oninput="spSet(${d},${i},'amt',this.value)"><span class="spu">元</span>
+    ${lock ? '' : `<a href="#" class="spx" title="刪除" onclick="spDel(${d},${i});return false">✕</a>`}</div>`).join('');
+  if(!lock) h += `<button class="spadd" onclick="spAdd(${d})">＋ 新增</button>`;
+  return h;
+}
+function spSet(d, i, f, v){ if(S.confirmed[d]) return; const l = spEnsure(d); if(!l[i]) return;
+  l[i][f] = f==='amt' ? (Number(v)||0) : f==='on' ? !!v : String(v); save(); calc(); }
+function spAdd(d){ if(S.confirmed[d]) return; spEnsure(d).push({text:'', amt:0, on:false}); save(); renderBody(); }
+function spDel(d, i){ if(S.confirmed[d]) return; const l = spEnsure(d); l.splice(i,1); if(!l.length) delete S.special[d]; save(); renderBody(); updateAdminUI(); }
 
 function confirmDay(d, v){ if(!isAdmin) return; if(v && !confirm('確認 '+dateOf(d)+' 的勾選？確認後就鎖住，只能從管理者後台取消。')) return; if(v) S.confirmed[d]=true; else delete S.confirmed[d]; save(); renderBody(); updateAdminUI(); }
 function refreshBackend(){
@@ -393,7 +443,7 @@ function addDay(){ S.days++; view = S.days-1; save(); renderBody(); if(window.in
 function removeLast(){ if(!isAdmin) return;
   if(S.days<=1) return;
   if(!confirm('確定刪除 '+dateOf(S.days-1)+' 這一天？')) return;
-  S.days--; delete S.confirmed[S.days]; for(const k in S.checks) if(k.startsWith(S.days+'-')) delete S.checks[k];
+  S.days--; delete S.confirmed[S.days]; if(S.special) delete S.special[S.days]; for(const k in S.checks) if(k.startsWith(S.days+'-')) delete S.checks[k];
   save(); renderBody();
 }
 function exportData(){
