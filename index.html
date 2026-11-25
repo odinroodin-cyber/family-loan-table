@@ -4,51 +4,108 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>借款折抵表</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
-  body{font-family:-apple-system,"PingFang TC","Microsoft JhengHei",sans-serif;margin:0;padding:16px;background:#f6f7f9;color:#222}
-  h1{font-size:20px;margin:0 0 12px}
-  .card{background:#fff;border:1px solid #ddd;border-radius:10px;padding:12px;margin-bottom:12px}
+  :root{
+    --bg:#f8f1e6;
+    --paper:#fffaf3;
+    --paper2:#fff6ea;
+    --ink:#4a3728;
+    --muted:#8a6e58;
+    --line:#e8d5c0;
+    --line2:#f0e2d2;
+    --tea:#c4a484;
+    --orange:#e89b5b;
+    --orange-deep:#d67b3a;
+    --peach:#fde8d0;
+    --gold:#e8a84a;
+    --ok:#3d7a4a;
+    --ok-bg:#eef6e8;
+    --wait:#9a5a1a;
+    --shadow:0 6px 18px rgba(160,110,60,.10);
+  }
+  *{box-sizing:border-box}
+  body{font-family:"Zen Maru Gothic","PingFang TC","Microsoft JhengHei","Noto Sans TC",sans-serif;margin:0;padding:16px;background:var(--bg);color:var(--ink)}
+  h1{font-size:20px;margin:0 0 10px;font-weight:700;letter-spacing:.02em}
+  .card{background:var(--paper);border:1px solid var(--line);border-radius:18px;padding:12px;margin-bottom:12px;box-shadow:var(--shadow)}
+  .cheer{background:linear-gradient(180deg,#fff7ec,#ffeeda);border:1px solid #f0d3b0;border-radius:18px;padding:10px 14px;margin-bottom:10px;font-size:15px;font-weight:500;color:#6b3e22;box-shadow:var(--shadow);line-height:1.45}
   .cfg{display:flex;flex-wrap:wrap;gap:14px;align-items:center}
   .cfg label{display:flex;gap:6px;align-items:center;font-size:14px}
   .cfg input[type=number]{width:110px;padding:4px 6px}
-  .wrap{overflow-x:auto}
-  table{border-collapse:collapse;background:#fff;min-width:900px;width:100%}
-  th,td{border:1px solid #999;padding:6px;text-align:center;font-size:14px}
-  th{background:#fafafa}
-  th textarea.name{width:120px;text-align:center;border:1px dashed #bbb;padding:2px;font:inherit;font-weight:bold;resize:none}
+  input[type=number],input[type=text],textarea,select{font:inherit;border:1px solid var(--tea);border-radius:10px;background:#fff;color:var(--ink)}
+  .wrap{overflow-x:auto;border-radius:18px;box-shadow:var(--shadow)}
+  table{border-collapse:collapse;background:var(--paper);min-width:900px;width:100%;border-radius:18px;overflow:hidden}
+  th,td{border:1px solid var(--line);padding:6px;text-align:center;font-size:14px}
+  th{background:#f6eadb}
+  th textarea.name{width:120px;text-align:center;border:1px dashed var(--tea);padding:2px;font:inherit;font-weight:700;resize:none;background:#fff}
   th input.amt{width:60px;text-align:right;padding:2px}
   th input.cnt{width:36px;text-align:center;padding:2px}
-  .sub{font-size:12px;color:#555;font-weight:normal}
-  td.date{white-space:nowrap;font-weight:bold}
-  td input[type=checkbox]{width:20px;height:20px;margin:2px;cursor:pointer}
+  .tico{font-style:normal;font-weight:400;margin-right:4px}
+  .sub{font-size:12px;color:var(--muted);font-weight:normal}
+  td.date{white-space:nowrap;font-weight:700}
   td.num{text-align:right;white-space:nowrap}
   th.fix{white-space:nowrap;min-width:90px}
   td.ok{white-space:nowrap;min-width:90px}
-  .rem{font-weight:bold}
+  tr.locked{background:#efe4d0}
+  input:disabled,textarea:disabled{background:#f3eadc;color:#6b5344;opacity:.9;cursor:default}
+  .rem{font-weight:700}
   .btns{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
-  button{padding:8px 14px;border-radius:8px;border:1px solid #888;background:#fff;cursor:pointer;font-size:14px}
-  button.primary{background:#2563eb;color:#fff;border-color:#2563eb}
+  button{padding:8px 14px;border-radius:14px;border:1px solid var(--tea);background:var(--paper);color:var(--ink);cursor:pointer;font:inherit;font-size:14px;box-shadow:0 2px 6px rgba(160,110,60,.08)}
+  button.primary{background:var(--orange-deep);color:#fff;border-color:var(--orange-deep)}
+  button:disabled{opacity:.45;cursor:default}
   .summary{font-size:15px;line-height:1.9}
   .summary b{font-size:18px}
   #cards{display:none}
-  .day{background:#fff;border:1px solid #ccc;border-radius:12px;margin-bottom:12px;overflow:hidden}
-  .day .hd{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:#fafafa;border-bottom:1px solid #ddd;font-weight:bold}
-  .day .it{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid #eee}
-  .day .it .nm{font-size:15px}
-  .day .it .am{font-size:12px;color:#666}
-  .day .it input[type=checkbox]{width:28px;height:28px;margin:3px}
-  .day .ft{display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px;padding:10px 12px;font-size:15px}
+  .day{background:var(--paper);border:1px solid var(--line);border-radius:18px;margin-bottom:12px;overflow:hidden;box-shadow:var(--shadow)}
+  .day.locked{background:#f6ecdc;border-color:#d9b889}
+  .day .hd{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:#f6eadb;border-bottom:1px solid var(--line);font-weight:700}
+  .day.locked .hd{background:#efe3d0}
+  .day .it{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid var(--line2)}
+  .day .it .nm{font-size:15px;font-weight:500;word-break:break-word}
+  .day .it .am{font-size:12px;color:var(--muted)}
+  .day .ft{display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px;padding:10px 12px;font-size:15px;background:#fff8f0}
   .spr{display:flex;align-items:center;gap:4px;margin:3px 0}
-  .spr input[type=checkbox]{width:22px;height:22px;flex:none}
   .spt{flex:1;min-width:0;padding:4px 6px;font-size:14px}
   .spa{width:72px;padding:4px 6px;font-size:14px;text-align:right}
-  .spu{font-size:13px;color:#555}
-  .spx{color:#c00;text-decoration:none;padding:0 4px;font-size:16px}
+  .spu{font-size:13px;color:var(--muted)}
+  .spx{color:#c45c3a;text-decoration:none;padding:0 4px;font-size:16px}
   button.spadd{padding:4px 10px;font-size:13px;margin-top:4px}
   th.sp,td.sp{min-width:240px;text-align:left}
+  input.star{
+    appearance:none;-webkit-appearance:none;
+    width:26px;height:26px;margin:2px;padding:0;border:0;background:transparent;
+    cursor:pointer;flex:none;vertical-align:middle;position:relative;display:inline-block
+  }
+  input.star::after{
+    content:"☆";position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    font-size:22px;line-height:1;color:#e0c4a0;transition:color .15s ease
+  }
+  input.star:checked::after{content:"★";color:var(--gold)}
+  input.star.pop:checked::after{animation:pop .28s ease}
+  input.star:disabled{cursor:default}
+  input.star:disabled::after{color:#d3c0aa}
+  input.star:disabled:checked::after{content:"★";color:#c48a3a}
+  input.star:focus-visible{outline:2px solid var(--orange);outline-offset:2px;border-radius:6px}
+  @keyframes pop{
+    0%{transform:scale(.6)}
+    50%{transform:scale(1.28)}
+    100%{transform:scale(1)}
+  }
+  .day .it input.star,.spr input.star{width:28px;height:28px}
+  .day .it input.star::after,.spr input.star::after{font-size:24px}
+  .prog{margin-top:10px}
+  .prog .pl{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:13px;color:var(--muted);margin-bottom:5px}
+  .prog .pl b{font-size:14px;color:var(--ink)}
+  .bar{height:10px;background:#f0e0cc;border-radius:999px;overflow:hidden}
+  .bar > i{display:block;height:100%;width:0;background:linear-gradient(90deg,#f0b27a,#e8894a);border-radius:999px;transition:width .4s ease}
+  .hist{background:var(--paper);border:1px solid var(--line);border-radius:18px;margin-bottom:10px;overflow:hidden;box-shadow:var(--shadow)}
+  .hist summary{padding:12px;font-weight:700;cursor:pointer;list-style:none}
+  .hist summary::-webkit-details-marker{display:none}
   @media (max-width:760px){
     .spt,.spa{font-size:16px}
-    .day .it .spr input[type=checkbox]{width:28px;height:28px}
+    .day .it .spr input.star{width:28px;height:28px}
     button.spadd{flex:none;padding:8px 14px}
     body{padding:10px}
     .wrap{display:none}
@@ -60,14 +117,15 @@
     .summary{font-size:14px}
   }
   .sg{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
-  .sg div{display:flex;flex-direction:column;background:#f6f7f9;border-radius:8px;padding:6px 8px}
-  .sg span{font-size:12px;color:#666}
+  .sg div{display:flex;flex-direction:column;background:#f6eadb;border-radius:14px;padding:6px 8px}
+  .sg span{font-size:12px;color:var(--muted)}
   .sg b{font-size:18px}
-  .sm{font-size:12px;color:#666;margin-top:6px}
+  .sm{font-size:12px;color:var(--muted);margin-top:6px}
   .nav{display:flex;gap:6px;margin-bottom:8px}
   .nav button{flex:1;padding:8px 4px;font-size:14px}
   @media (max-width:760px){
     h1{font-size:18px;margin:0 0 6px}
+    .cheer{font-size:14px;padding:8px 10px;margin-bottom:8px}
     #status{font-size:12px !important;padding:6px 10px;margin-bottom:4px}
     #sync{font-size:11px !important;margin:0 2px 6px !important}
     .card{padding:8px 10px;margin-bottom:8px}
@@ -78,14 +136,16 @@
     .day .hd{padding:8px 12px}
     .day .it{padding:7px 12px}
     .day .it .nm{font-size:14px}
-    .day .it input[type=checkbox]{width:26px;height:26px}
+    .day .it input.star{width:26px;height:26px}
+    .day .it input.star::after{font-size:22px}
   }
 </style>
 </head>
 <body>
 <h1>借款折抵表</h1>
+<div id="cheer" class="cheer"></div>
 <div class="card" id="status" style="font-size:14px"></div>
-<div id="sync" style="font-size:13px;color:#555;margin:-6px 2px 10px"></div>
+<div id="sync" style="font-size:13px;color:#6b5344;margin:-6px 2px 10px"></div>
 
 <div class="card" id="cfgCard">
   <div class="cfg">
@@ -179,9 +239,9 @@ function loadHistory(){
   const st = dayStats(); let h = '';
   for(let d=S.days-1; d>=0; d--){
     const ok = S.confirmed[d];
-    h += `<div onclick="view=${d};renderBody();updateAdminUI()" style="padding:10px 12px;border-top:1px solid #eee;cursor:pointer;${d===view?'background:#eef4ff':''}">
-      <div style="display:flex;justify-content:space-between;font-weight:bold"><span>${dateOf(d)}</span>${ok?'<span style="color:#14632d">✔ 已確認</span>':'<span style="color:#8a4b00">待確認</span>'}</div>
-      <div style="display:flex;justify-content:space-between;font-size:13px;color:#555;margin-top:3px"><span>${ok?'':'待確認 '}折抵 ${fmt(st[d].disc)} 元</span><span>剩餘本金+利息 ${fmt(st[d].rem)} 元</span></div></div>`;
+    h += `<div onclick="view=${d};renderBody();updateAdminUI()" style="padding:10px 12px;border-top:1px solid #f0e2d2;cursor:pointer;${d===view?'background:#fde8d0':''}">
+      <div style="display:flex;justify-content:space-between;font-weight:bold"><span>${dateOf(d)}</span>${ok?'<span style="color:#3d7a4a">✔ 已確認</span>':'<span style="color:#9a5a1a">待確認</span>'}</div>
+      <div style="display:flex;justify-content:space-between;font-size:13px;color:#8a6e58;margin-top:3px"><span>${ok?'':'待確認 '}折抵 ${fmt(st[d].disc)} 元</span><span>剩餘本金+利息 ${fmt(st[d].rem)} 元</span></div></div>`;
   }
   document.getElementById('histList').innerHTML = h;
 }
@@ -215,7 +275,7 @@ function setSync(st, msg){
     ok: '☁️ 已同步' + (t ? '（' + t + '）' : '') + '',
     error: '⚠️ 無法連線雲端，目前顯示這台裝置上的資料；修改會先存在這台裝置，連上後自動同步'
   };
-  el.textContent = msg || m[st]; el.style.color = st==='error' ? '#b45309' : '#555';
+  el.textContent = msg || m[st]; el.style.color = st==='error' ? '#9a5a1a' : '#6b5344';
 }
 async function fetchRemote(){
   const r = await fetch(DB_URL + '?t=' + Date.now(), {cache:'no-store'});
@@ -337,10 +397,9 @@ function updateAdminUI(){
   document.querySelectorAll('.cfg input, th textarea, th input').forEach(el => el.disabled = !isAdmin);
   document.querySelectorAll('.delTask').forEach(el => el.style.display = isAdmin ? '' : 'none');
   const st = document.getElementById('status');
-  if(isAdmin){ st.textContent = '管理者模式：可以確認每一天、修改金額、項目和借款設定，所有修改都會自動儲存'; st.style.background='#e7f6ec'; st.style.color='#14632d'; }
-  else { st.textContent = '一般模式：勾選會自動儲存，管理者確認後才算數'; st.style.background='#eef2f7'; st.style.color='#333'; }
+  if(isAdmin){ st.textContent = '管理者模式：可以確認每一天、修改金額、項目和借款設定，所有修改都會自動儲存'; st.style.background='#eef6e8'; st.style.color='#3d7a4a'; }
+  else { st.textContent = '一般模式：勾選會自動儲存，管理者確認後才算數'; st.style.background='#fff1e0'; st.style.color='#4a3728'; }
 }
-
 
 function dateOf(i){
   const d = new Date(S.start + 'T00:00:00'); d.setDate(d.getDate() + i);
@@ -359,34 +418,57 @@ function totalOwed(){ const P = Number(S.total)||0; if(P<=0) return 0; return mo
 function dailyPay(){ return monthlyPay()/30; }
 
 function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+function taskIcon(name){
+  const n = String(name||'');
+  if(/貓砂|垃圾/.test(n)) return '🐱';
+  if(/跳繩|拉筋/.test(n)) return '🤸';
+  if(/衣服/.test(n)) return '🧺';
+  if(/入睡|睡/.test(n)) return '🌙';
+  if(/外送/.test(n)) return '🛵';
+  if(/英文/.test(n)) return '🏆';
+  if(/小考|考/.test(n)) return '📚';
+  return '🌟';
+}
+function cheerText(){
+  const d = todayIndex();
+  if(d < 0) return '開始日還沒到，先慢慢準備就好 🌼';
+  if(d >= S.days) return '今天也辛苦了！💛';
+  if(S.confirmed[d]) return '今天的努力已確認，真的辛苦了！好好休息吧 🌙';
+  let total = 0, done = 0;
+  S.tasks.forEach((t, ti) => { for(let b=0; b<t.cnt; b++){ total++; if(S.checks[`${d}-${ti}-${b}`]) done++; } });
+  const spOn = ((S.special && S.special[d]) || []).filter(e => e.on).length;
+  if(done === 0 && spOn === 0) return '今天也辛苦了！先從一件小事開始吧 💛';
+  if(total > 0 && done >= total) return '今天的項目都勾完了，等管理者確認就可以折抵囉 🌟';
+  return '做得很好！已經完成 ' + (done + spOn) + ' 項，繼續加油 ✨';
+}
+function starBox(k, d){
+  return `<input type="checkbox" class="star" ${S.checks[k]?'checked':''} ${S.confirmed[d]?'disabled':''} onchange="this.classList.add('pop');toggle('${k}',this.checked)">`;
+}
 
 function renderHeader(){
   const h1 = document.getElementById('h1'), h2 = document.getElementById('h2');
   let a = '<th rowspan="2">日期</th>', b = '';
   S.tasks.forEach((t, i) => {
-    a += `<th><textarea class="name" rows="2" onchange="setTask(${i},'name',this.value)">${esc(t.name)}</textarea><br>
+    a += `<th><span class="tico">${taskIcon(t.name)}</span><textarea class="name" rows="2" onchange="setTask(${i},'name',this.value)">${esc(t.name)}</textarea><br>
       <span class="sub">格數 <input class="cnt" type="number" min="1" max="10" value="${t.cnt}" onchange="setTask(${i},'cnt',this.value)">
-      <a class="delTask" href="#" onclick="delTask(${i});return false" title="刪除項目" style="color:#c00;text-decoration:none">✕</a></span></th>`;
+      <a class="delTask" href="#" onclick="delTask(${i});return false" title="刪除項目" style="color:#c45c3a;text-decoration:none">✕</a></span></th>`;
     b += `<th class="sub">單次折抵 <input class="amt" type="number" value="${t.amt}" onchange="setTask(${i},'amt',this.value)"> 元</th>`;
   });
-  a += '<th class="sp" rowspan="2">特殊折抵</th><th class="fix" rowspan="2">管理者確認</th><th class="fix" rowspan="2">當日折抵</th><th class="fix" rowspan="2">當日利息</th><th class="fix" rowspan="2">剩餘本金<br>+利息</th>';
+  a += '<th class="sp" rowspan="2">✨ 特殊折抵</th><th class="fix" rowspan="2">管理者確認</th><th class="fix" rowspan="2">當日折抵</th><th class="fix" rowspan="2">當日利息</th><th class="fix" rowspan="2">剩餘本金<br>+利息</th>';
   h1.innerHTML = a; h2.innerHTML = b;
 }
 
 function renderBody(){
   let html = '';
   for(let d=0; d<S.days; d++){
-    html += `<tr><td class="date">${dateOf(d)}</td>`;
+    html += `<tr${S.confirmed[d]?' class="locked"':''}><td class="date">${dateOf(d)}</td>`;
     S.tasks.forEach((t, ti) => {
       html += '<td>';
-      for(let b=0; b<t.cnt; b++){
-        const k = `${d}-${ti}-${b}`;
-        html += `<input type="checkbox" ${S.checks[k]?'checked':''} ${S.confirmed[d]?'disabled':''} onchange="toggle('${k}',this.checked)">`;
-      }
+      for(let b=0; b<t.cnt; b++) html += starBox(`${d}-${ti}-${b}`, d);
       html += '</td>';
     });
     html += `<td class="sp">${spHtml(d)}</td>`;
-    html += `<td class="ok">${S.confirmed[d] ? '<span style="color:#14632d;font-weight:bold">✔ 已確認</span>' : (isAdmin ? `<button onclick="confirmDay(${d},true)" style="padding:4px 10px">確認當天</button>` : '<span style="color:#8a4b00">待確認</span>')}</td><td class="num" data-disc="${d}"></td><td class="num" data-int="${d}"></td><td class="num rem" data-rem="${d}"></td></tr>`;
+    html += `<td class="ok">${S.confirmed[d] ? '<span style="color:#3d7a4a;font-weight:bold">✔ 已確認</span>' : (isAdmin ? `<button onclick="confirmDay(${d},true)" style="padding:4px 10px">確認當天</button>` : '<span style="color:#9a5a1a">待確認</span>')}</td><td class="num" data-disc="${d}"></td><td class="num" data-int="${d}"></td><td class="num rem" data-rem="${d}"></td></tr>`;
   }
   document.getElementById('body').innerHTML = html;
   let c = '';
@@ -394,22 +476,22 @@ function renderBody(){
   view = Math.max(0, Math.min(S.days-1, view));
   c += `<div class="nav"><button onclick="go(-1)" ${view<=0?'disabled':''}>◀ 前一天</button><button onclick="view=todayIndex();renderBody();updateAdminUI()">今天</button><button onclick="go(1)" ${view>=S.days-1?'disabled':''}>後一天 ▶</button></div>`;
   for(let d=view; d===view; d++){
-    const st = S.confirmed[d] ? '<span style="color:#14632d">✔ 已確認</span>' : (isAdmin ? `<button onclick="confirmDay(${d},true)" style="flex:none;padding:6px 12px">確認當天</button>` : '<span style="color:#8a4b00">待確認</span>');
-    c += `<div class="day"><div class="hd"><span>${dateOf(d)}</span>${st}</div>`;
+    const st = S.confirmed[d] ? '<span style="color:#3d7a4a">✔ 已確認</span>' : (isAdmin ? `<button onclick="confirmDay(${d},true)" style="flex:none;padding:6px 12px">確認當天</button>` : '<span style="color:#9a5a1a">待確認</span>');
+    c += `<div class="day${S.confirmed[d]?' locked':''}"><div class="hd"><span>${dateOf(d)}</span>${st}</div>`;
     S.tasks.forEach((t, ti) => {
       let boxes = '';
-      for(let b=0; b<t.cnt; b++){ const k = `${d}-${ti}-${b}`; boxes += `<input type="checkbox" ${S.checks[k]?'checked':''} ${S.confirmed[d]?'disabled':''} onchange="toggle('${k}',this.checked)">`; }
-      c += `<div class="it"><div><div class="nm">${esc(t.name)}</div><div class="am">單次折抵 ${fmt(t.amt)} 元</div></div><div>${boxes}</div></div>`;
+      for(let b=0; b<t.cnt; b++) boxes += starBox(`${d}-${ti}-${b}`, d);
+      c += `<div class="it"><div><div class="nm"><span class="tico">${taskIcon(t.name)}</span>${esc(t.name)}</div><div class="am">單次折抵 ${fmt(t.amt)} 元</div></div><div>${boxes}</div></div>`;
     });
-    c += `<div class="it" style="display:block"><div class="nm" style="margin-bottom:6px">特殊折抵</div>${spHtml(d)}</div>`;
+    c += `<div class="it" style="display:block"><div class="nm" style="margin-bottom:6px">✨ 特殊折抵</div>${spHtml(d)}</div>`;
     c += `<div class="ft"><span>當日折抵 <span data-disc="${d}"></span></span><span>當日利息 <span data-int="${d}"></span></span><span>剩餘本金+利息 <b data-rem="${d}"></b></span></div></div>`;
   }
-  c += `<details id="dayMenu" style="background:#fff;border:1px solid #ccc;border-radius:12px;margin-bottom:10px;overflow:hidden" ontoggle="menuOpen=this.open; if(this.open) loadHistory()"><summary style="padding:12px;font-weight:bold;cursor:pointer">📅 歷史紀錄（目前顯示 ${dateOf(view)}）</summary><div id="histList" style="max-height:55vh;overflow-y:auto"></div></details>`;
+  c += `<details id="dayMenu" class="hist" ontoggle="menuOpen=this.open; if(this.open) loadHistory()"><summary>📅 歷史紀錄（目前顯示 ${dateOf(view)}）</summary><div id="histList" style="max-height:55vh;overflow-y:auto"></div></details>`;
   document.getElementById('cards').innerHTML = c;
   calc();
 }
 
-function syncBoxes(){ document.querySelectorAll('input[type=checkbox][onchange^="toggle"]').forEach(el => { const k = el.getAttribute('onchange').match(/'(.+?)'/)[1]; el.checked = !!S.checks[k]; }); }
+function syncBoxes(){ document.querySelectorAll('input[type=checkbox][onchange*="toggle"]').forEach(el => { const k = el.getAttribute('onchange').match(/'(.+?)'/)[1]; el.checked = !!S.checks[k]; }); }
 function setAll(t,d,v){ document.querySelectorAll(`[data-${t}="${d}"]`).forEach(el => el.textContent = v); }
 function calc(){
   const mp = monthlyPay(), dp = dailyPay(), L = ledger();
@@ -418,8 +500,15 @@ function calc(){
     setAll('int',d, '+' + (Math.round(x.interest*100)/100).toLocaleString('zh-TW') + ' 元');
     setAll('rem',d, fmt(x.owed) + ' 元');
   });
+  const P = Number(S.total)||0;
+  const repaid = P>0 ? Math.max(0, Math.min(1, (P - L.principal)/P)) : 0;
+  const pct = Math.round(repaid*1000)/10;
+  const pctShow = Number.isInteger(pct) ? String(pct) : pct.toFixed(1);
+  const cheerEl = document.getElementById('cheer');
+  if(cheerEl) cheerEl.textContent = cheerText();
   document.getElementById('summary').innerHTML =
     `<div class="sg"><div><span>剩餘本金+利息</span><b>${fmt(L.owed)}</b></div><div><span>剩餘本金</span><b>${fmt(L.principal)}</b></div><div><span>未付利息</span><b>${fmt(L.accrued)}</b></div><div><span>已確認折抵</span><b>${fmt(L.totalDisc)}</b></div></div>
+     <div class="prog"><div class="pl"><span>還款進度（已還本金）</span><b>${pctShow}%</b></div><div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(repaid*100)}"><i style="width:${(repaid*100).toFixed(2)}%"></i></div></div>
      <div class="sm">借款 ${fmt(S.total||0)} 元・年利率 ${S.rate||0}%（每天約增加 ${(Math.round(Math.max(0,L.principal)*(Number(S.rate)||0)/100/365*100)/100).toLocaleString('zh-TW')} 元利息）・${S.term||0} 期・每月應繳 ${fmt(mp)} 元・每日應繳 ${fmt(dp)} 元・待確認 ${fmt(pending=L.pending)} 元</div>
      <div class="sm">折抵會先抵掉未付利息，抵完才扣本金</div>`;
 }
@@ -432,7 +521,7 @@ function spDisc(d){ const l = S.special && S.special[d]; return l ? l.reduce((a,
 function spHtml(d){
   const lock = !!S.confirmed[d], dis = lock ? 'disabled' : '';
   let h = spList(d).map((e,i) => `<div class="spr">
-    <input type="checkbox" ${e.on?'checked':''} ${dis} onchange="spSet(${d},${i},'on',this.checked)">
+    <input type="checkbox" class="star" ${e.on?'checked':''} ${dis} onchange="this.classList.add('pop');spSet(${d},${i},'on',this.checked)">
     <input type="text" class="spt" placeholder="說明" value="${esc(e.text||'')}" ${dis} oninput="spSet(${d},${i},'text',this.value)">
     <input type="number" class="spa" placeholder="金額" value="${e.amt?e.amt:''}" ${dis} oninput="spSet(${d},${i},'amt',this.value)"><span class="spu">元</span>
     ${lock ? '' : `<a href="#" class="spx" title="刪除" onclick="spDel(${d},${i});return false">✕</a>`}</div>`).join('');
