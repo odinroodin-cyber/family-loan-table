@@ -145,6 +145,24 @@
     .day .it input.star{width:26px;height:26px}
     .day .it input.star::after{font-size:22px}
   }
+
+  button.retbtn{padding:6px 12px;flex:none;background:#fff;color:#c45c3a;border-color:#e2b6a6;font-weight:700}
+  button.danger{background:#c45c3a;color:#fff;border-color:#c45c3a}
+  .badge-ret{display:inline-block;color:#9a5a1a;background:#fff1e0;border:1px solid #f0d3b0;border-radius:999px;padding:3px 8px;font-size:13px;font-weight:700}
+  input.star{-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+  #dlg{display:none;position:fixed;inset:0;z-index:10000;background:rgba(74,55,40,.45);align-items:flex-end;justify-content:center;padding:16px;padding-bottom:max(16px,env(safe-area-inset-bottom))}
+  #dlg.show{display:flex}
+  #dlg .box{background:var(--paper);border:1px solid var(--line);border-radius:20px 20px 16px 16px;padding:18px 16px 14px;width:100%;max-width:400px;box-shadow:0 16px 40px rgba(74,55,40,.22)}
+  #dlg h2{margin:0 0 8px;font-size:18px}
+  #dlg p{margin:0 0 12px;font-size:15px;line-height:1.55}
+  #dlg input{width:100%;padding:12px;font-size:16px;margin:0 0 8px}
+  #dlg .err{color:#c45c3a;font-size:13px;min-height:1.2em;margin:0 0 8px}
+  #dlg .row{display:flex;gap:8px}
+  #dlg .row button{flex:1;padding:12px 14px}
+  @media (min-width:500px){
+    #dlg{align-items:center}
+    #dlg .box{border-radius:18px}
+  }
 </style>
 </head>
 <body>
@@ -166,10 +184,10 @@
 
 <div class="card" id="backend" style="display:none">
   <b>管理者後台</b>
-  <div style="font-size:14px;margin:6px 0">在這裡可以取消某一天的確認，取消後那天就能重新勾選。</div>
+  <div style="font-size:14px;margin:6px 0">已確認的那天，也可以直接在當天資料上按「退回」。退回後大家都能再修改，改完再按「確認當天」。</div>
   <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
     <select id="unDay" style="padding:6px"></select>
-    <button onclick="unconfirm()">取消這天的確認</button>
+    <button class="retbtn" onclick="unconfirm()">退回這天</button>
   </div>
 </div>
 
@@ -194,6 +212,20 @@
   <input type="file" id="imp" accept=".json" style="display:none" onchange="importData(event)">
 </div>
 
+
+<div id="dlg" role="dialog" aria-modal="true" aria-labelledby="dlgTitle">
+  <div class="box" onclick="event.stopPropagation()">
+    <h2 id="dlgTitle"></h2>
+    <p id="dlgMsg"></p>
+    <div id="dlgFields"></div>
+    <div class="err" id="dlgErr"></div>
+    <div class="row">
+      <button type="button" id="dlgCancel">取消</button>
+      <button type="button" class="primary" id="dlgOk">確定</button>
+    </div>
+  </div>
+</div>
+
 <script>
 const KEY = 'family-loan-table-v1';
 const defaults = {
@@ -212,6 +244,7 @@ const defaults = {
   days: 3,
   checks: {},
   confirmed: {},
+  returned: {},
   special: {}
 };
 let S = load();
@@ -245,13 +278,24 @@ function loadHistory(){
   const st = dayStats(); let h = '';
   for(let d=S.days-1; d>=0; d--){
     const ok = S.confirmed[d];
+    const tag = ok ? '<span style="color:#3d7a4a">✔ 已確認</span>' : ((S.returned && S.returned[d]) ? '<span class="badge-ret">已退回，請修正</span>' : '<span style="color:#9a5a1a">待確認</span>');
     h += `<div onclick="view=${d};renderBody();updateAdminUI()" style="padding:10px 12px;border-top:1px solid #f0e2d2;cursor:pointer;${d===view?'background:#fde8d0':''}">
-      <div style="display:flex;justify-content:space-between;font-weight:bold"><span>${dateOf(d)}</span>${ok?'<span style="color:#3d7a4a">✔ 已確認</span>':'<span style="color:#9a5a1a">待確認</span>'}</div>
+      <div style="display:flex;justify-content:space-between;font-weight:bold;gap:8px;align-items:center"><span>${dateOf(d)}</span>${tag}</div>
       <div style="display:flex;justify-content:space-between;font-size:13px;color:#8a6e58;margin-top:3px"><span>${ok?'':'待確認 '}折抵 ${fmt(st[d].disc)} 元</span><span>剩餘本金+利息 ${fmt(st[d].rem)} 元</span></div></div>`;
   }
   document.getElementById('histList').innerHTML = h;
 }
 function go(n){ view += n; renderBody(); updateAdminUI(); }
+function goToday(){ view = todayIndex(); renderBody(); updateAdminUI(); }
+function ensureMobileShell(){
+  if(document.getElementById('dayNav')) return;
+  const wrap = document.getElementById('cards');
+  wrap.innerHTML = `<div id="dayNav" class="nav"><button type="button" id="prevDay">◀ 前一天</button><button type="button" id="todayBtn">今天</button><button type="button" id="nextDay">後一天 ▶</button></div><div id="dayCard"></div><details id="dayMenu" class="hist"><summary id="dayMenuSum"></summary><div id="histList" style="max-height:55vh;overflow-y:auto"></div></details>`;
+  document.getElementById('prevDay').onclick = () => { if(view>0) go(-1); };
+  document.getElementById('todayBtn').onclick = goToday;
+  document.getElementById('nextDay').onclick = () => { if(view<S.days-1) go(1); };
+  document.getElementById('dayMenu').addEventListener('toggle', function(){ menuOpen=this.open; if(this.open) loadHistory(); });
+}
 // 日期自動補到今天
 function extendToToday(){ const ti = todayIndex(); if(ti+1 > S.days){ S.days = ti+1; return true; } return false; }
 if(extendToToday()) localStorage.setItem(KEY, JSON.stringify(S));
@@ -300,7 +344,7 @@ function merge3(b, l, r){
   b = b || {}; const out = clone(r);
   const keys = new Set([...Object.keys(b), ...Object.keys(l)]);
   for(const k of keys){
-    if(k==='checks' || k==='confirmed'){
+    if(k==='checks' || k==='confirmed' || k==='returned'){
       const bb = b[k]||{}, ll = l[k]||{}; out[k] = out[k]||{};
       for(const s of new Set([...Object.keys(bb), ...Object.keys(ll)])){
         if(!!bb[s] !== !!ll[s]){ if(ll[s]) out[k][s] = true; else delete out[k][s]; }
@@ -320,6 +364,7 @@ function merge3(b, l, r){
     for(const c in out.checks) if(c.startsWith(d+'-') && !r.checks[c]) delete out.checks[c];
     for(const c in r.checks) if(c.startsWith(d+'-')) out.checks[c] = true;
     out.special = out.special||{}; if(r.special && r.special[d]) out.special[d] = clone(r.special[d]); else delete out.special[d];
+    if(out.returned) delete out.returned[d];
   }
   return out;
 }
@@ -380,20 +425,83 @@ setInterval(() => { if(document.visibilityState==='visible') pull(); }, 20000);
 document.addEventListener('visibilitychange', () => { if(document.visibilityState==='visible') pull(); });
 window.addEventListener('online', () => pull());
 async function sha(t){ const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(t)); return Array.from(new Uint8Array(b)).map(x=>x.toString(16).padStart(2,'0')).join(''); }
+let dlgWait = null;
+function closeDlg(result){
+  const dlg = document.getElementById('dlg');
+  dlg.classList.remove('show');
+  document.body.style.overflow = '';
+  const fn = dlgWait; dlgWait = null;
+  if(fn) fn(result);
+}
+function openDlg({title, message, fields, ok='確定', cancel='取消', danger=false, validate}={}){
+  return new Promise(resolve => {
+    const dlg = document.getElementById('dlg');
+    document.getElementById('dlgTitle').textContent = title || '請確認';
+    const msg = document.getElementById('dlgMsg');
+    msg.textContent = message || '';
+    msg.style.display = message ? '' : 'none';
+    document.getElementById('dlgErr').textContent = '';
+    const box = document.getElementById('dlgFields');
+    box.innerHTML = fields || '';
+    const okBtn = document.getElementById('dlgOk');
+    const cancelBtn = document.getElementById('dlgCancel');
+    okBtn.textContent = ok;
+    cancelBtn.textContent = cancel || '取消';
+    cancelBtn.style.display = cancel ? '' : 'none';
+    okBtn.className = danger ? 'danger' : 'primary';
+    dlgWait = resolve;
+    dlg.classList.add('show');
+    document.body.style.overflow = 'hidden';
+    const first = box.querySelector('input');
+    setTimeout(() => (first || okBtn).focus(), 50);
+    okBtn.onclick = async () => {
+      const inputs = [...box.querySelectorAll('input')].map(i => i.value);
+      if(validate){
+        const err = await validate(inputs);
+        if(err){ document.getElementById('dlgErr').textContent = err; const inp = box.querySelector('input'); if(inp){ inp.focus(); inp.select && inp.select(); } return; }
+      }
+      closeDlg(fields ? (inputs.length<=1 ? (inputs[0] ?? '') : inputs) : true);
+    };
+    cancelBtn.onclick = () => closeDlg(null);
+  });
+}
+document.getElementById('dlg').addEventListener('click', e => { if(e.target.id==='dlg') closeDlg(null); });
+document.getElementById('dlg').addEventListener('keydown', e => {
+  if(!document.getElementById('dlg').classList.contains('show')) return;
+  if(e.key==='Escape'){ e.preventDefault(); closeDlg(null); }
+  if(e.key==='Enter' && e.target.tagName==='INPUT'){ e.preventDefault(); document.getElementById('dlgOk').click(); }
+});
 async function adminLogin(){
   if(isAdmin){ isAdmin=false; init(); return; }
   const stored = S.adminHash || localStorage.getItem(PKEY) || await sha('1111');
-  const p = prompt('請輸入管理者密碼：'); if(p===null) return;
-  if(await sha(p) === stored) isAdmin = true; else { alert('密碼錯誤'); return; }
+  const p = await openDlg({
+    title: '管理者登入',
+    message: '請輸入管理者密碼',
+    fields: '<input type="password" inputmode="numeric" autocomplete="current-password" placeholder="密碼">',
+    ok: '登入', cancel: '取消',
+    validate: async ([v]) => (await sha(v||'') === stored) ? '' : '密碼錯誤，請再試一次'
+  });
+  if(p===null) return;
+  isAdmin = true;
   init();
 }
 async function changePwd(){
   if(!isAdmin) return;
-  const p1 = prompt('請輸入新的管理者密碼：'); if(!p1) return;
-  const p2 = prompt('請再輸入一次確認：'); if(p1!==p2){ alert('兩次密碼不一樣，沒有變更。'); return; }
-  S.adminHash = await sha(p1); localStorage.setItem(PKEY, S.adminHash); save(); alert('密碼已更新');
+  const res = await openDlg({
+    title: '更改密碼',
+    message: '請輸入新的管理者密碼，並再輸入一次確認。',
+    fields: '<input type="password" autocomplete="new-password" placeholder="新密碼"><input type="password" autocomplete="new-password" placeholder="再輸入一次">',
+    ok: '更新密碼', cancel: '取消',
+    validate: ([a,b]) => !a ? '請輸入新密碼' : (a!==b ? '兩次密碼不一樣，請再輸入一次' : '')
+  });
+  if(res===null) return;
+  S.adminHash = await sha(res[0]); localStorage.setItem(PKEY, S.adminHash); save();
+  await openDlg({title:'已更新', message:'密碼已更新。', ok:'知道了', cancel:''});
 }
-function discard(){ if(confirm('放棄所有還沒儲存的修改？')){ S = load(); dirty=false; init(); } }
+async function discard(){
+  const ok = await openDlg({title:'放棄修改', message:'放棄所有還沒儲存的修改？', ok:'放棄', cancel:'取消', danger:true});
+  if(ok){ S = load(); dirty=false; init(); }
+}
 function updateAdminUI(){
   refreshBackend();
   document.getElementById('cfgCard').style.display = isAdmin ? '' : 'none';
@@ -403,8 +511,8 @@ function updateAdminUI(){
   document.querySelectorAll('.cfg input, th textarea, th input').forEach(el => el.disabled = !isAdmin);
   document.querySelectorAll('.delTask').forEach(el => el.style.display = isAdmin ? '' : 'none');
   const st = document.getElementById('status');
-  if(isAdmin){ st.textContent = '管理者模式：可以確認每一天、修改金額、項目和借款設定，所有修改都會自動儲存'; st.style.background='#eef6e8'; st.style.color='#3d7a4a'; }
-  else { st.textContent = '一般模式：勾選會自動儲存，管理者確認後才算數'; st.style.background='#fff1e0'; st.style.color='#4a3728'; }
+  if(isAdmin){ st.textContent = '管理者模式：可以確認每一天；發現錯誤時，在已確認的那天按「退回」，就能讓大家再改。金額、項目和借款設定也可以改，所有修改都會自動儲存'; st.style.background='#eef6e8'; st.style.color='#3d7a4a'; }
+  else { st.textContent = '一般模式：勾選後如果打錯，在管理者確認前都可以再改或取消勾選；管理者確認後才算數'; st.style.background='#fff1e0'; st.style.color='#4a3728'; }
 }
 
 function dateOf(i){
@@ -440,6 +548,7 @@ function cheerText(){
   if(d < 0) return '開始日還沒到，先慢慢準備就好 🌼';
   if(d >= S.days) return '今天也辛苦了！💛';
   if(S.confirmed[d]) return '今天的努力已確認，真的辛苦了！好好休息吧 🌙';
+  if(S.returned && S.returned[d]) return '管理者已退回今天，請再檢查一次，打錯的可以先改掉 ✨';
   let total = 0, done = 0;
   S.tasks.forEach((t, ti) => { for(let b=0; b<t.cnt; b++){ total++; if(S.checks[`${d}-${ti}-${b}`]) done++; } });
   const spOn = ((S.special && S.special[d]) || []).filter(e => e.on).length;
@@ -448,7 +557,7 @@ function cheerText(){
   return '做得很好！已經完成 ' + (done + spOn) + ' 項，繼續加油 ✨';
 }
 function starBox(k, d){
-  return `<input type="checkbox" class="star" ${S.checks[k]?'checked':''} ${S.confirmed[d]?'disabled':''} onchange="this.classList.add('pop');toggle('${k}',this.checked)">`;
+  return `<input type="checkbox" class="star" data-k="${k}" ${S.checks[k]?'checked':''} ${S.confirmed[d]?'disabled':''} onchange="this.classList.add('pop');toggle('${k}',this.checked)">`;
 }
 
 function renderHeader(){
@@ -474,30 +583,32 @@ function renderBody(){
       html += '</td>';
     });
     html += `<td class="sp">${spHtml(d)}</td>`;
-    html += `<td class="ok">${S.confirmed[d] ? '<span style="color:#3d7a4a;font-weight:bold">✔ 已確認</span>' : (isAdmin ? `<button onclick="confirmDay(${d},true)" style="padding:4px 10px">確認當天</button>` : '<span style="color:#9a5a1a">待確認</span>')}</td><td class="num" data-disc="${d}"></td><td class="num" data-int="${d}"></td><td class="num rem" data-rem="${d}"></td></tr>`;
+    html += `<td class="ok">${dayStatus(d)}</td><td class="num" data-disc="${d}"></td><td class="num" data-int="${d}"></td><td class="num rem" data-rem="${d}"></td></tr>`;
   }
   document.getElementById('body').innerHTML = html;
-  let c = '';
   if(view===null) view = todayIndex();
   view = Math.max(0, Math.min(S.days-1, view));
-  c += `<div class="nav"><button onclick="go(-1)" ${view<=0?'disabled':''}>◀ 前一天</button><button onclick="view=todayIndex();renderBody();updateAdminUI()">今天</button><button onclick="go(1)" ${view>=S.days-1?'disabled':''}>後一天 ▶</button></div>`;
-  for(let d=view; d===view; d++){
-    const st = S.confirmed[d] ? '<span style="color:#3d7a4a">✔ 已確認</span>' : (isAdmin ? `<button onclick="confirmDay(${d},true)" style="flex:none;padding:6px 12px">確認當天</button>` : '<span style="color:#9a5a1a">待確認</span>');
-    c += `<div class="day${S.confirmed[d]?' locked':''}"><div class="hd"><span>${dateOf(d)}</span>${st}</div>`;
-    S.tasks.forEach((t, ti) => {
-      let boxes = '';
-      for(let b=0; b<t.cnt; b++) boxes += starBox(`${d}-${ti}-${b}`, d);
-      c += `<div class="it"><div><div class="nm"><span class="tico">${taskIcon(t.name)}</span>${esc(t.name)}</div><div class="am">單次折抵 ${fmt(t.amt)} 元</div></div><div>${boxes}</div></div>`;
-    });
-    c += `<div class="it" style="display:block"><div class="nm" style="margin-bottom:6px">✨ 特殊折抵</div>${spHtml(d)}</div>`;
-    c += `<div class="ft"><span>當日折抵 <span data-disc="${d}"></span></span><span>當日利息 <span data-int="${d}"></span></span><span>剩餘本金+利息 <b data-rem="${d}"></b></span></div></div>`;
-  }
-  c += `<details id="dayMenu" class="hist" ontoggle="menuOpen=this.open; if(this.open) loadHistory()"><summary>📅 歷史紀錄（目前顯示 ${dateOf(view)}）</summary><div id="histList" style="max-height:55vh;overflow-y:auto"></div></details>`;
-  document.getElementById('cards').innerHTML = c;
+  ensureMobileShell();
+  document.getElementById('prevDay').disabled = view<=0;
+  document.getElementById('nextDay').disabled = view>=S.days-1;
+  const d = view;
+  let c = `<div class="day${S.confirmed[d]?' locked':''}"><div class="hd"><span>${dateOf(d)}</span>${dayStatus(d)}</div>`;
+  S.tasks.forEach((t, ti) => {
+    let boxes = '';
+    for(let b=0; b<t.cnt; b++) boxes += starBox(`${d}-${ti}-${b}`, d);
+    c += `<div class="it"><div><div class="nm"><span class="tico">${taskIcon(t.name)}</span>${esc(t.name)}</div><div class="am">單次折抵 ${fmt(t.amt)} 元</div></div><div>${boxes}</div></div>`;
+  });
+  c += `<div class="it" style="display:block"><div class="nm" style="margin-bottom:6px">✨ 特殊折抵</div>${spHtml(d)}</div>`;
+  c += `<div class="ft"><span>當日折抵 <span data-disc="${d}"></span></span><span>當日利息 <span data-int="${d}"></span></span><span>剩餘本金+利息 <b data-rem="${d}"></b></span></div></div>`;
+  document.getElementById('dayCard').innerHTML = c;
+  const sum = document.getElementById('dayMenuSum');
+  if(sum) sum.textContent = '📅 歷史紀錄（目前顯示 ' + dateOf(view) + '）';
+  const menu = document.getElementById('dayMenu');
+  if(menu && menuOpen){ menu.open = true; loadHistory(); }
   calc();
 }
 
-function syncBoxes(){ document.querySelectorAll('input[type=checkbox][onchange*="toggle"]').forEach(el => { const k = el.getAttribute('onchange').match(/'(.+?)'/)[1]; el.checked = !!S.checks[k]; }); }
+function syncBoxes(){ document.querySelectorAll('input.star[data-k]').forEach(el => { el.checked = !!S.checks[el.getAttribute('data-k')]; }); }
 function setAll(t,d,v){ document.querySelectorAll(`[data-${t}="${d}"]`).forEach(el => el.textContent = v); }
 function calc(){
   const mp = monthlyPay(), dp = dailyPay(), L = ledger();
@@ -539,7 +650,41 @@ function spSet(d, i, f, v){ if(S.confirmed[d]) return; const l = spEnsure(d); if
 function spAdd(d){ if(S.confirmed[d]) return; spEnsure(d).push({text:'', amt:0, on:false}); save(); renderBody(); }
 function spDel(d, i){ if(S.confirmed[d]) return; const l = spEnsure(d); l.splice(i,1); if(!l.length) delete S.special[d]; save(); renderBody(); updateAdminUI(); }
 
-function confirmDay(d, v){ if(!isAdmin) return; if(v && !confirm('確認 '+dateOf(d)+' 的勾選？確認後就鎖住，只能從管理者後台取消。')) return; if(v) S.confirmed[d]=true; else delete S.confirmed[d]; save(); renderBody(); updateAdminUI(); }
+function dayStatus(d){
+  if(S.confirmed[d]){
+    const mark = '<span style="color:#3d7a4a;font-weight:700">✔ 已確認</span>';
+    if(!isAdmin) return mark;
+    return `<span style="display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end">${mark}<button type="button" class="retbtn" onclick="unconfirmDay(${d})">退回</button></span>`;
+  }
+  const badge = (S.returned && S.returned[d]) ? '<span class="badge-ret">已退回，請修正</span>' : '<span style="color:#9a5a1a">待確認</span>';
+  if(!isAdmin) return badge;
+  return `<span style="display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end">${badge}<button type="button" onclick="confirmDay(${d})" style="flex:none;padding:6px 12px">確認當天</button></span>`;
+}
+async function confirmDay(d){
+  if(!isAdmin) return;
+  const ok = await openDlg({
+    title: '確認當天',
+    message: '確認 '+dateOf(d)+' 的勾選？確認後就鎖住，之後若要修改，請管理者按「退回」。',
+    ok: '確認', cancel: '取消'
+  });
+  if(!ok) return;
+  S.confirmed[d] = true;
+  if(S.returned) delete S.returned[d];
+  save(); renderBody(); updateAdminUI();
+}
+async function unconfirmDay(d){
+  if(!isAdmin || !S.confirmed[d]) return;
+  const ok = await openDlg({
+    title: '退回',
+    message: '退回 '+dateOf(d)+'？退回後大家都可以再修改，改完後請再按「確認當天」。',
+    ok: '退回', cancel: '取消', danger: true
+  });
+  if(!ok) return;
+  delete S.confirmed[d];
+  S.returned = S.returned || {};
+  S.returned[d] = true;
+  save(); renderBody(); updateAdminUI();
+}
 function refreshBackend(){
   const sel = document.getElementById('unDay'); let o = '';
   for(let d=0; d<S.days; d++) if(S.confirmed[d]) o += `<option value="${d}">${dateOf(d)}</option>`;
@@ -548,8 +693,7 @@ function refreshBackend(){
 }
 function unconfirm(){
   const v = document.getElementById('unDay').value; if(v==='') return;
-  if(!confirm('取消 '+dateOf(Number(v))+' 的確認？')) return;
-  delete S.confirmed[Number(v)]; save(); renderBody(); updateAdminUI();
+  unconfirmDay(Number(v));
 }
 function toggle(k, v){ const d = Number(k.split('-')[0]); if(S.confirmed[d]) return; setTimeout(syncBoxes,0); if(v) S.checks[k]=true; else delete S.checks[k]; save(); calc(); }
 function setTask(i, f, v){ if(!isAdmin) return;
@@ -557,17 +701,19 @@ function setTask(i, f, v){ if(!isAdmin) return;
   S.tasks[i][f] = v; save(); renderHeader(); renderBody(); updateAdminUI();
 }
 function addTask(){ if(!isAdmin) return; S.tasks.push({name:'新項目', amt:50, cnt:1}); save(); renderHeader(); renderBody(); updateAdminUI(); }
-function delTask(i){ if(!isAdmin) return;
-  if(!confirm('確定刪除「'+S.tasks[i].name+'」這個項目？它的勾選紀錄也會一起刪掉。')) return;
+async function delTask(i){ if(!isAdmin) return;
+  const ok = await openDlg({title:'刪除項目', message:'確定刪除「'+S.tasks[i].name+'」這個項目？它的勾選紀錄也會一起刪掉。', ok:'刪除', cancel:'取消', danger:true});
+  if(!ok) return;
   const nc = {};
   for(const k in S.checks){ const [d,t,b] = k.split('-').map(Number); if(t<i) nc[k]=true; else if(t>i) nc[`${d}-${t-1}-${b}`]=true; }
   S.checks = nc; S.tasks.splice(i,1); save(); renderHeader(); renderBody(); updateAdminUI();
 }
 function addDay(){ S.days++; view = S.days-1; save(); renderBody(); if(window.innerWidth>760) window.scrollTo(0, document.body.scrollHeight); else document.getElementById('cards').scrollIntoView(); }
-function removeLast(){ if(!isAdmin) return;
+async function removeLast(){ if(!isAdmin) return;
   if(S.days<=1) return;
-  if(!confirm('確定刪除 '+dateOf(S.days-1)+' 這一天？')) return;
-  S.days--; delete S.confirmed[S.days]; if(S.special) delete S.special[S.days]; for(const k in S.checks) if(k.startsWith(S.days+'-')) delete S.checks[k];
+  const ok = await openDlg({title:'刪除日期', message:'確定刪除 '+dateOf(S.days-1)+' 這一天？', ok:'刪除', cancel:'取消', danger:true});
+  if(!ok) return;
+  S.days--; delete S.confirmed[S.days]; if(S.returned) delete S.returned[S.days]; if(S.special) delete S.special[S.days]; for(const k in S.checks) if(k.startsWith(S.days+'-')) delete S.checks[k];
   save(); renderBody();
 }
 function exportData(){
@@ -577,7 +723,7 @@ function exportData(){
 }
 function importData(e){
   const f = e.target.files[0]; if(!f) return;
-  if(!isAdmin){ alert('只有管理者可以匯入備份，請先登入。'); e.target.value=''; return; }
+  if(!isAdmin){ openDlg({title:'無法匯入', message:'只有管理者可以匯入備份，請先登入。', ok:'知道了', cancel:''}); e.target.value=''; return; }
   f.text().then(t => { S = Object.assign({}, JSON.parse(JSON.stringify(defaults)), JSON.parse(t)); save(); init(); });
 }
 
